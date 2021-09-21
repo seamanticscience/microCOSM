@@ -106,49 +106,49 @@
        s1in   =   34.00
        s2in   =   35.50
        s3in   =   34.75
-       ! Initial concentrations in mol/kg
+       ! Initial concentrations in (u/n)mol/kg
        ! Make sure to compile with -DFIXATMPCO2 first
-       !c1in   = 2100.e-6
-       !c2in   = 2100.e-6
-       !c3in   = 2350.e-6
-       !a1in   = 2300.e-6
-       !a2in   = 2300.e-6
-       !a3in   = 2400.e-6
-       !p1in   =    2.0e-6
-       !p2in   =    0.0e-6
-       !p3in   =    2.5e-6
-       !n1in   =   32.0e-6
-       !n2in   =    0.0e-6
-       !n3in   =   36.0e-6
-       !f1in   =    0.e-9
-       !f2in   =    0.e-9
-       !f3in   =    0.e-9
-       !l1in   =    0.e-9
-       !l2in   =    0.e-9
-       !l3in   =    0.e-9
+       !c1in   = 2100.
+       !c2in   = 2100.
+       !c3in   = 2350.
+       !a1in   = 2300.
+       !a2in   = 2300.
+       !a3in   = 2400.
+       !p1in   =    2.0
+       !p2in   =    0.0
+       !p3in   =    2.5
+       !n1in   =   32.0
+       !n2in   =    0.0
+       !n3in   =   36.0
+       !f1in   =    0.
+       !f2in   =    0.
+       !f3in   =    0.
+       !l1in   =    0.
+       !l2in   =    0.
+       !l3in   =    0.
        !atpco2in =  280.
 
-       ! Initial concentrations in mol/kg
+       ! Initial concentrations in (u/n)mol/kg
        ! Here are some equilibrated values run for 100,000 yrs (round-off error notwithstanding)
        ! Make sure to compile without -DFIXATMPCO2
-       c1in   = 2264.67564e-6 
-       c2in   = 2103.48757e-6
-       c3in   = 2364.66971e-6
-       a1in   = 2395.54471e-6
-       a2in   = 2387.42965e-6
-       a3in   = 2399.11941e-6
-       p1in   =    1.81089e-6
-       p2in   =    0.25031e-6
-       p3in   =    2.49834e-6
-       n1in   =   25.01353e-6
-       n2in   =    0.04412e-6
-       n3in   =   36.01262e-6
-       f1in   =    0.00377e-9
-       f2in   =    0.49776e-9
-       f3in   =    0.58847e-9
-       l1in   =    2.08548e-9
-       l2in   =    1.56387e-9
-       l3in   =    1.62029e-9
+       c1in   = 2264.67564 
+       c2in   = 2103.48757
+       c3in   = 2364.66971
+       a1in   = 2395.54471
+       a2in   = 2387.42965
+       a3in   = 2399.11941
+       p1in   =    1.81089
+       p2in   =    0.25031
+       p3in   =    2.49834
+       n1in   =   25.01353
+       n2in   =    0.04412
+       n3in   =   36.01262
+       f1in   =    0.00377
+       f2in   =    0.49776
+       f3in   =    0.58847
+       l1in   =    2.08548
+       l2in   =    1.56387
+       l3in   =    1.62029
        atpco2in =  280.00000
 
        ! Input some example parameters

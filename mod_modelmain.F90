@@ -75,14 +75,14 @@
        
        theta = (/t1in,t2in,t3in/)
        salt  = (/s1in,s2in,s3in/) 
-! convert from mol kg-1 to moles m-3
-       dic = (/c1in,c2in,c3in/)*conv 
-       alk = (/a1in,a2in,a3in/)*conv 
-       po4 = (/p1in,p2in,p3in/)*conv 
-       no3 = (/n1in,n2in,n3in/)*conv 
-       fet = (/f1in,f2in,f3in/)*conv
-       lt  = (/l1in,l2in,l3in/)*conv 
-       sit = (/p1in,p2in,p3in/)*conv*rSIP
+! convert from u/nmol kg-1 to moles m-3
+       dic = (/c1in,c2in,c3in/) * conv * 1e-6
+       alk = (/a1in,a2in,a3in/) * conv * 1e-6
+       po4 = (/p1in,p2in,p3in/) * conv * 1e-6
+       no3 = (/n1in,n2in,n3in/) * conv * 1e-6
+       fet = (/f1in,f2in,f3in/) * conv * 1e-9
+       lt  = (/l1in,l2in,l3in/) * conv * 1e-9
+       sit = (/p1in,p2in,p3in/) * conv * rSIP * 1e-6
        ph  = (/  8 ,  8 ,  8 /)
            
 ! initialize tracer rates of change
@@ -159,7 +159,7 @@
  100   end do     
  
 ! write initial values to the output....
-! convert to nmol kg-1 for iron, micromol kg-1 for PO4
+! convert to nmol kg-1 for iron, umol kg-1 for PO4
        dicM = (dic/conv) * 1.0e6  
        alkM = (alk/conv) * 1.0e6  
        po4M = (po4/conv) * 1.0e6  
@@ -401,7 +401,7 @@
 ! if an output time, write some output to screen and file
        if (mod(time,outputyears) .eq. 0)then
 
-! For output ! convert to nmol kg-1 (Fe, LT) micromol kg-1 (other)
+! For output ! convert to mol kg-1
          dicM = (dic/conv) * 1.0e6  
          alkM = (alk/conv) * 1.0e6  
          po4M = (po4/conv) * 1.0e6  
