@@ -38,9 +38,10 @@ A progenitor of this model was originally developed by [Mick Follows](http://mic
 Any questions, comments or feature requests, please get in contact! I hope to develop some more interesting avenues (dual numbers, northern hemisphere land box, atmospheric dynamics, climate feedbacks, etc) and maybe come up with a family of versions based around other simple geometries (e.g. the old Toggweiler configurations).
 
 ### Troubleshooting tips:
-1. Because f2py is finicky about allocatable output arrays, it is ideal to aim for 1000 output timesteps (i.e. 10kyrs at 10yr output, 100kyrs at 100yr output, etc.) You can, of course change this manually by altering `outstepmax` in _comdeck.h_ and _microCOSM_model.F90_.
-2. Importing the model package was causing python environment crashes due to memory address segfaults. Turns out `f2py` was a bit confused about what version of OSX I was using and was cross compiling to Mavericks instead of Catalina. I was able to solve this by issuing:
+~~1. Because f2py is finicky about allocatable output arrays, it is ideal to aim for 1000 output timesteps (i.e. 10kyrs at 10yr output, 100kyrs at 100yr output, etc.) You can, of course change this manually by altering `outstepmax` in _comdeck.h_ and _microCOSM_model.F90_.~~
+1. Allocatable (i.e. variable length) output arrays are now working, but the length is supplied as a runtime arguement.
+2. Importing the model package was causing python environment crashes due to memory address segfaults. Turns out `f2py` was a bit confused about what version of OSX I was using and was cross compiling different MacOS releases. I was able to solve this by issuing:
 ```
->>export MACOSX_DEPLOYMENT_TARGET=10.15 
+>>export MACOSX_DEPLOYMENT_TARGET=xx.yy [or whatever version you are using] 
 ```
 before compiling.
