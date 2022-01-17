@@ -20,9 +20,10 @@
 !=======================================================================
        PROGRAM MICROCOSM_MODEL
 !=======================================================================
-       USE MOD_MODELMAIN
        USE MOD_PRECISION
-       
+       USE MOD_BOXES
+       USE MOD_MODELMAIN
+
        IMPLICIT NONE
        REAL(KIND=wp) :: t1in 
        REAL(KIND=wp) :: t2in 
@@ -50,153 +51,188 @@
        REAL(KIND=wp) :: l3in 
        REAL(KIND=wp) :: atpco2in 
 
-       INTEGER :: id
+       INTEGER :: outstepmax, id
        REAL(KIND=wp) :: maxyears
        REAL(KIND=wp) :: outputyears
        REAL(KIND=wp) :: gaovla_opt
        REAL(KIND=wp) :: gamma_Fe
        REAL(KIND=wp) :: lt_lifetime
-       REAL(KIND=wp) :: depfactor
-       REAL(KIND=wp) :: ventfactor
+       REAL(KIND=wp) :: fe_input1
+       REAL(KIND=wp) :: fe_input2
+       REAL(KIND=wp) :: fe_input3
        REAL(KIND=wp) :: alpha_yr
-       REAL(KIND=wp) :: dlambdadz
+       REAL(KIND=wp) :: dlambdadz1
+       REAL(KIND=wp) :: dlambdadz2
+       REAL(KIND=wp) :: dlambdadz3
        REAL(KIND=wp) :: psi
+       REAL(KIND=wp) :: wind1
+       REAL(KIND=wp) :: wind2
+       REAL(KIND=wp) :: wind3
+       REAL(KIND=wp) :: fopen1
+       REAL(KIND=wp) :: fopen2
+       REAL(KIND=wp) :: fopen3
        
-       ! Cannot use allocatable arrays with f2py :(
-       INTEGER, PARAMETER  :: outstepmax = 1000
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: tout  
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: t1out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: t2out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: t3out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: s1out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: s2out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: s3out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: c1out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: c2out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: c3out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: a1out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: a2out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: a3out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: p1out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: p2out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: p3out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: n1out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: n2out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: n3out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: f1out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: f2out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: f3out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: l1out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: l2out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: l3out 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: ep1out
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: ep2out
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: nlout 
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: psout        
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: o1pco2out
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: o2pco2out
-       REAL(KIND=wp), DIMENSION(outstepmax+1) :: atpco2out
+       REAL(KIND=wp), dimension (:,:), allocatable ::                  &
+            thout,                                                     &
+            sout,                                                      &
+            cout,                                                      &
+            aout,                                                      &
+            pout,                                                      &
+            nout,                                                      &
+            fout,                                                      &
+            lout,                                                      &
+            expout,                                                    &
+            pco2out
+            
+       REAL(KIND=wp), dimension (:), allocatable   ::                  &
+            tout,                                                      &
+            psout,                                                     &
+            atpco2out
 
+       INTEGER, dimension (:), allocatable   ::                        &
+            nlout
+       
        ! Input some initial parameters
-       maxyears   = 1.e4
-       outputyears= 1.e1
-       t1in   =    2.0
-       t2in   =   20.0
-       t3in   =    4.0
-       s1in   =   34.00
-       s2in   =   35.50
-       s3in   =   34.75
+       maxyears   = 1.e5_wp
+       outputyears= 1.e2_wp
+       outstepmax = int((maxyears/outputyears)+1)
+       
+       ! allocate memory
+       allocate ( tout      (outstepmax) )
+       allocate ( nlout     (outstepmax) )
+       allocate ( psout     (outstepmax) )
+       allocate ( atpco2out (outstepmax) )
+       allocate ( thout     (outstepmax,nbox) )
+       allocate ( sout      (outstepmax,nbox) )
+       allocate ( cout      (outstepmax,nbox) )
+       allocate ( aout      (outstepmax,nbox) )
+       allocate ( pout      (outstepmax,nbox) )
+       allocate ( nout      (outstepmax,nbox) )
+       allocate ( fout      (outstepmax,nbox) )
+       allocate ( lout      (outstepmax,nbox) )
+       allocate ( expout    (outstepmax,nbox) )
+       allocate ( pco2out   (outstepmax,nbox) )
+       
+       ! Input arguements
+       t1in   =    2._wp
+       t2in   =   20._wp
+       t3in   =    4._wp
+       s1in   =   34._wp
+       s2in   =   35.50_wp
+       s3in   =   34.75_wp
        ! Initial concentrations in (u/n)mol/kg
        ! Make sure to compile with -DFIXATMPCO2 first
-       !c1in   = 2100.
-       !c2in   = 2100.
-       !c3in   = 2350.
-       !a1in   = 2300.
-       !a2in   = 2300.
-       !a3in   = 2400.
-       !p1in   =    2.0
-       !p2in   =    0.0
-       !p3in   =    2.5
-       !n1in   =   32.0
-       !n2in   =    0.0
-       !n3in   =   36.0
-       !f1in   =    0.
-       !f2in   =    0.
-       !f3in   =    0.
-       !l1in   =    0.
-       !l2in   =    0.
-       !l3in   =    0.
-       !atpco2in =  280.
+       c1in   = 2100._wp
+       c2in   = 2100._wp
+       c3in   = 2350._wp
+       a1in   = 2300._wp
+       a2in   = 2300._wp
+       a3in   = 2400._wp
+       p1in   =    2._wp
+       p2in   =    0._wp
+       p3in   =    2.5_wp
+       n1in   =   32._wp
+       n2in   =    0._wp
+       n3in   =   36._wp
+       f1in   =    0._wp
+       f2in   =    0._wp
+       f3in   =    0._wp
+       l1in   =    0._wp
+       l2in   =    0._wp
+       l3in   =    0._wp
+       atpco2in =  280._wp
 
        ! Initial concentrations in (u/n)mol/kg
        ! Here are some equilibrated values run for 100,000 yrs (round-off error notwithstanding)
        ! Make sure to compile without -DFIXATMPCO2
-       c1in   = 2264.67564 
-       c2in   = 2103.48757
-       c3in   = 2364.66971
-       a1in   = 2395.54471
-       a2in   = 2387.42965
-       a3in   = 2399.11941
-       p1in   =    1.81089
-       p2in   =    0.25031
-       p3in   =    2.49834
-       n1in   =   25.01353
-       n2in   =    0.04412
-       n3in   =   36.01262
-       f1in   =    0.00377
-       f2in   =    0.49776
-       f3in   =    0.58847
-       l1in   =    2.08548
-       l2in   =    1.56387
-       l3in   =    1.62029
-       atpco2in =  280.00000
+       !c1in   = 2262.29678_wp 
+       !c2in   = 2102.93797_wp
+       !c3in   = 2363.90418_wp
+       !a1in   = 2395.63558_wp
+       !a2in   = 2387.42536_wp
+       !a3in   = 2399.11408_wp
+       !p1in   =    1.82962_wp
+       !p2in   =    0.25073_wp
+       !p3in   =    2.49856_wp
+       !n1in   =   25.31309_wp
+       !n2in   =    0.05089_wp
+       !n3in   =   36.01617_wp
+       !f1in   =    0.00273_wp
+       !f2in   =    0.32988_wp
+       !f3in   =    0.57430_wp
+       !l1in   =    1.70537_wp
+       !l2in   =    1.62990_wp
+       !l3in   =    1.62589_wp
+       !atpco2in= 280.00000_wp
 
        ! Input some example parameters
+       ! Wind speed (m/s)for CO2 gas fluxes
+       wind1 = 10._wp
+       wind2 = 5._wp
+       wind3 = 0._wp
+       
+       ! Open surface fraction in contact with atmoshpere 
+       !  1 => fully open, <1 => flux impeded (e.g. by sea ice)
+       fopen1 = 1._wp
+       fopen2 = 1._wp
+       fopen3 = 0._wp
+       
        ! Gamma over lambda for ligands "optimum" value (Lauderdale et al 2020)
-       gaovla_opt = 4398.
+       gaovla_opt = 4398._wp
        ! Gamma ligand production rate (in phosphate, not carbon, units)
-       gamma_Fe    = 5.e-5*106.
+       gamma_Fe    = 5.e-5_wp*106._wp
        ! Lambda ligand lifetime (s)
-       lt_lifetime =  1/((gamma_Fe/106.)/gaovla_opt)
+       lt_lifetime =  1._wp/((gamma_Fe/106._wp)/gaovla_opt)
        ! Dust deposition in g Fe m-2 year-1
-       depfactor   = 0.15
+       fe_input1    = 1.5e-3_wp
+       fe_input2    = 1.5e-1_wp
        ! Hydrothermal vent input of 1 Gmol/yr (Tagliabue et al., 2010)
        ! mol Fe/yr * g/mol * 1/area  == g Fe m-2 year-1....
        !divide by 2.5e-3 because fe_sol is multiplied again within model.
-       ventfactor  = (1.e9*56.)/(17.e6*16.e6*2.5e-3)
+       fe_input3    = (1.e9_wp*56._wp)/(17.e6_wp*16.e6_wp*2.5e-3_wp)
+
        ! Biological production maximum rate (mol P/yr)
-       alpha_yr    = 6.e-6
+       alpha_yr     = 6.e-6_wp
        ! Deep ocean box lifetime modifier to capture the gradient due to
        ! photodegradation near the surface and slower loss in the deep
-       dlambdadz   = 1.e-2
+       dlambdadz1   = 1._wp
+       dlambdadz2   = 1._wp
+       dlambdadz3   = 1.e-2_wp
        ! Overturning rate (m3/s)
-       psi         = 20.0e6
+       psi         = 20.0e6_wp
        ! File number identifier
        id          = 1
             
-       call model(maxyears, outputyears,                               &
-            t1in,t2in,t3in,                                            &
-            s1in,s2in,s3in,                                            &
-            c1in,c2in,c3in,                                            &
-            a1in,a2in,a3in,                                            &
-            p1in,p2in,p3in,                                            &
-            n1in,n2in,n3in,                                            &
-            f1in,f2in,f3in,                                            &
-            l1in,l2in,l3in,                                            &
+       call model(id, maxyears, outputyears, outstepmax,               &
+            psi, alpha_yr,                                             &
+            gamma_Fe, lt_lifetime,                                     &
+            (/dlambdadz1,dlambdadz2,dlambdadz3/),                      &
+            (/fe_input1 ,fe_input2 ,fe_input3 /),                      &
+            (/wind1,wind2,wind3/),                                     &
+            (/fopen1,fopen2,fopen3/),                                  &
+            (/t1in,t2in,t3in/),                                        &
+            (/s1in,s2in,s3in/),                                        &
+            (/c1in,c2in,c3in/),                                        &
+            (/a1in,a2in,a3in/),                                        &
+            (/p1in,p2in,p3in/),                                        &
+            (/n1in,n2in,n3in/),                                        &
+            (/f1in,f2in,f3in/),                                        &
+            (/l1in,l2in,l3in/),                                        &
             atpco2in,                                                  &
             tout,                                                      &
-            t1out,t2out,t3out,                                         &
-            s1out,s2out,s3out,                                         &
-            c1out,c2out,c3out,                                         &
-            a1out,a2out,a3out,                                         &
-            p1out,p2out,p3out,                                         &
-            n1out,n2out,n3out,                                         &
-            f1out,f2out,f3out,                                         &
-            l1out,l2out,l3out,                                         &
-            ep1out,ep2out,nlout,psout,                                 &
-            o1pco2out,o2pco2out,atpco2out,                             &
-            gamma_Fe,lt_lifetime,depfactor,ventfactor,                 &
-            alpha_yr,dlambdadz,psi,id)
+            thout,                                                     &
+            sout,                                                      &
+            cout,                                                      &
+            aout,                                                      &
+            pout,                                                      &
+            nout,                                                      &
+            fout,                                                      &
+            lout,                                                      &
+            expout,                                                    &
+            nlout,                                                     &
+            psout,                                                     &
+            pco2out,                                                   &
+            atpco2out)
 
 !=======================================================================
        END PROGRAM MICROCOSM_MODEL

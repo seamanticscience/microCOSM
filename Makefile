@@ -8,10 +8,10 @@ RM = /bin/rm -f
 FC = gfortran
 PC = f2py
 FFLAGS = '-O3'
-OPTIONDEFS = -DWRITEOUTFILE 
+OPTIONDEFS = -DWRITEOUTFILE
 
-MODULE_OBJS_MICROCOSM = mod_precision.o mod_chemconst.o mod_chemspeciation.o mod_phsolvers.o mod_carbonchem.o mod_modelmain.o
-MODULE_F90_MICROCOSM = mod_precision.f90 mod_chemconst.f90 mod_chemspeciation.f90 mod_phsolvers.F90 mod_carbonchem.f90 mod_modelmain.F90
+MODULE_OBJS_MICROCOSM = mod_precision.o mod_dimensions.o mod_common.o mod_chemconst.o mod_chemspeciation.o mod_phsolvers.o mod_carbonchem.o mod_modelmain.o
+MODULE_F90_MICROCOSM = mod_precision.f90 mod_dimensions.f90 mod_common.f90 mod_chemconst.f90 mod_chemspeciation.f90 mod_phsolvers.F90 mod_carbonchem.f90 mod_modelmain.F90
 
 default: $(MODULE_OBJS)
 

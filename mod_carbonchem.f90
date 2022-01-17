@@ -20,6 +20,7 @@
        USE MOD_CHEMCONST
        USE MOD_PHSOLVERS
        USE MOD_CHEMSPECIATION
+       USE MOD_BOXES
        IMPLICIT NONE
       
 ! --------------------------------------------------------
@@ -142,7 +143,7 @@
               
        delta = (57.7_wp - 0.118_wp*t_k)
        B1 = -1636.75_wp + 12.0408_wp*t_k - 0.0327957_wp*t_k*t_k
-       B  = B1 + 3.16528_wp*t_k*t_k*t_k*1.e-5
+       B  = B1 + 3.16528_wp*t_k*t_k*t_k*1.e-5_wp
  
 !  "x2" term often neglected (assumed=1) in applications of Weiss's (1974) eq.9
 !   x2 = 1 - x1 = 1 - xCO2 (it is very close to 1, but not quite)
@@ -190,7 +191,7 @@
 !       RETURN
 !       END FUNCTION AK_CARB_0_WEIS74
 !!=======================================================================
-  
+
 !=======================================================================
       SUBROUTINE CALC_PCO2(theta,salt,dic,alk,po4,sit,                 &
                          ph,pco2oce,co3,hco3,co2aq)
@@ -212,13 +213,13 @@
       REAL(KIND=wp) hini, z_val, hnew
       REAL(KIND=wp) bor, nh4, h2s, so4, flu
 
-      nh4 =  0.E-3
-      h2s =  0.E-3
+      nh4 =  0.E-3_wp
+      h2s =  0.E-3_wp
       bor =  A_BTOT_SALIN  (salt)
       so4 =  A_SO4TOT_SALIN(salt)
       flu =  A_FTOT_SALIN  (salt)
 
-      hini = 10.**(-1.0 * ph)
+      hini = 10._wp**(-1.0_wp * ph)
 
       hnew = SOLVE_AT_GENERAL(alk, dic, bor, po4, sit, nh4, h2s,       &   
                             so4, flu, p_hini=hini, p_val=z_val)
@@ -241,46 +242,84 @@
 !=======================================================================
 
 !=======================================================================
-      SUBROUTINE CARBON_FLUX(theta,salt,dic,alk,po4,si,                &
-                                 ph,pco2atm,wind,fice,pco2oce,fluxCO2)
+      SUBROUTINE CARBON_FLUXES(theta,salt,dic,alk,po4,si,              &
+                               ph,pco2atmos,wind,fopen,pressure,       &
+                               pco2ocean,fluxCO2)
 !Calculate air-sea CO2 flux
 
 !    Argument variables
-      REAL(KIND=wp), INTENT(IN) ::  theta, salt, dic, alk, po4, si 
-      REAL(KIND=wp), INTENT(IN) ::  wind, pco2atm, fice
-      REAL(KIND=wp), INTENT(INOUT) :: ph
-      REAL(KIND=wp), INTENT(OUT)::  pco2oce, fluxCO2
+      REAL(KIND=wp), INTENT(IN),    DIMENSION(nbox) :: theta,          &
+                                                        salt,          &
+                                                         dic,          &
+                                                         alk,          &
+                                                         po4,          &
+                                                         si
+      REAL(KIND=wp), INTENT(IN),    DIMENSION(nbox) :: wind,           &
+                                                       fopen,          &
+                                                       pressure
+      REAL(KIND=wp), INTENT(INOUT), DIMENSION(nbox) :: ph
+      REAL(KIND=wp), INTENT(OUT),   DIMENSION(nbox) :: pco2ocean,      &
+                                                       fluxCO2
+      REAL(KIND=wp), INTENT(IN)                     :: pco2atmos
           
 !    Local variables       
-      REAL(KIND=wp) scadic, Kwexch
-      REAL(KIND=wp) co3, hco3, co2aq
-       
-      CALL CALC_PCO2(theta,salt,dic,alk,po4,si,                        &
-                         ph,pco2oce,co3,hco3,co2aq)
+      REAL(KIND=wp),   DIMENSION(nbox) :: scadic, Kwexch
+      REAL(KIND=wp),   DIMENSION(nbox) :: co3, hco3, co2aq
       
-!     calculate SCHMIDT NO. for CO2
-              scadic =                                                 &
-                  2073.1                                               &
-                -  125.62     * theta                                  &
-                +    3.6276   * theta * theta                          &
-                -    0.043219 * theta * theta * theta                  
-!make sure Schmidt number is not negative (will happen if temp>39C)
-             scadic=max(1.0e-2, scadic)
+      INTEGER                          :: i
+      
+! Initialize
+      pco2ocean = 0._wp
+      fluxCO2   = 0._wp
+      scadic    = 0._wp
+      Kwexch    = 0._wp
+      co3       = 0._wp
+      hco3      = 0._wp
+      co2aq     = 0._wp
+           
+!     calculate SCHMIDT NO. for CO2 (4th order, Wanninkhof 2014)
+      scadic =  2116.8_wp                                              &
+              -  136.25_wp     * theta                                 &
+              +    4.7353_wp   * theta * theta                         &
+              -    0.092307_wp * theta * theta * theta                 &
+              +    7.555e-4_wp * theta * theta * theta * theta
 
-        Kwexch = (0.337 * wind**2/3.6e5)                               &
-              * (1. - fice)                                            &
-               / sqrt(scadic/660.0)    
+      Kwexch =  (0.337_wp * wind**2._wp/3.6e5_wp) * fopen              &
+                / sqrt(scadic/660._wp)    
+               
+      do i = 1,nbox
+          ! calculate surface coefficients 
+          CALL SETUP_API4PHSWS( t_k_zerodegc + theta(i),               &
+                                                salt(i),               &
+                                            pressure(i))
+          CALL SETUP_FLUXCOEFFS(t_k_zerodegc + theta(i),               & 
+                                                salt(i))
 
+          CALL CALC_PCO2(theta(i),                                     &
+                          salt(i),                                     &
+                           dic(i),                                     &
+                           alk(i),                                     &
+                           po4(i),                                     &
+                            si(i),                                     &
+                            ph(i),                                     &
+                     pco2ocean(i),                                     &
+                           co3(i),                                     &
+                          hco3(i),                                     &
+                         co2aq(i))
+           
 !Flux = kw*rho*(ff*pCO2atm-k0*FugFac*pCO2ocean)
-               fluxCO2 = Kwexch*(                                      &
-                  pco2atm*apiff_atm -                                  &
-                  pco2oce*apiff_oce                                    &
-                  *api0_dic )
+          fluxCO2(i) = Kwexch(i)*(                                     &
+                               pco2atmos    * apiff_atm -              &
+                               pco2ocean(i) * apiff_oce                &
+                             * api0_dic )
                   
+      end do
+
 !      convert flux (mol kg-1 m s-1) to (mol m-2 s-1)
-         fluxCO2 = fluxCO2/permil
+      fluxCO2 = fluxCO2/permil
+
       RETURN
-      END SUBROUTINE CARBON_FLUX
+      END SUBROUTINE CARBON_FLUXES
 !=======================================================================
 
 !=======================================================================
@@ -289,7 +328,7 @@
 !Integrate atmospheri!carbon content       
 
 !    Argument variables
-      REAL(KIND=wp), INTENT(IN) :: atmos_moles, netCO2flux
+      REAL(KIND=wp), INTENT(IN)   :: atmos_moles, netCO2flux
       REAL(KIND=wp), INTENT(INOUT):: pco2atm, atmos_carbon
       
 !    How much carbon (moles) is currently in the atmosphere
