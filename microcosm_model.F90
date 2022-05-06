@@ -1,3 +1,4 @@
+! -*- f90 -*-
 ! atmospherd-3-box-ocean carbon cycle model
 ! mick follows, march 2015
 ! convert matlab to f90 - march/june 2016
@@ -25,53 +26,42 @@
        USE MOD_MODELMAIN
 
        IMPLICIT NONE
-       REAL(KIND=wp) :: t1in 
-       REAL(KIND=wp) :: t2in 
-       REAL(KIND=wp) :: t3in 
-       REAL(KIND=wp) :: s1in 
-       REAL(KIND=wp) :: s2in 
-       REAL(KIND=wp) :: s3in 
-       REAL(KIND=wp) :: c1in 
-       REAL(KIND=wp) :: c2in 
-       REAL(KIND=wp) :: c3in 
-       REAL(KIND=wp) :: a1in 
-       REAL(KIND=wp) :: a2in 
-       REAL(KIND=wp) :: a3in 
-       REAL(KIND=wp) :: p1in 
-       REAL(KIND=wp) :: p2in 
-       REAL(KIND=wp) :: p3in 
-       REAL(KIND=wp) :: n1in 
-       REAL(KIND=wp) :: n2in 
-       REAL(KIND=wp) :: n3in 
-       REAL(KIND=wp) :: f1in 
-       REAL(KIND=wp) :: f2in 
-       REAL(KIND=wp) :: f3in 
-       REAL(KIND=wp) :: l1in 
-       REAL(KIND=wp) :: l2in 
-       REAL(KIND=wp) :: l3in 
-       REAL(KIND=wp) :: atpco2in 
 
        INTEGER :: outstepmax, id
-       REAL(KIND=wp) :: maxyears
-       REAL(KIND=wp) :: outputyears
-       REAL(KIND=wp) :: gaovla_opt
-       REAL(KIND=wp) :: gamma_Fe
-       REAL(KIND=wp) :: lt_lifetime
-       REAL(KIND=wp) :: fe_input1
-       REAL(KIND=wp) :: fe_input2
-       REAL(KIND=wp) :: fe_input3
-       REAL(KIND=wp) :: alpha_yr
-       REAL(KIND=wp) :: dlambdadz1
-       REAL(KIND=wp) :: dlambdadz2
-       REAL(KIND=wp) :: dlambdadz3
-       REAL(KIND=wp) :: psi
-       REAL(KIND=wp) :: wind1
-       REAL(KIND=wp) :: wind2
-       REAL(KIND=wp) :: wind3
-       REAL(KIND=wp) :: fopen1
-       REAL(KIND=wp) :: fopen2
-       REAL(KIND=wp) :: fopen3
        
+       REAL(KIND=wp) ::                                                &
+            maxyears,                                                  &
+            outputyears,                                               &
+            gaovla_opt,                                                &
+            gamma_Fe,                                                  &
+            lt_lifetime,                                               &
+            alpha_yr,                                                  &
+            psi,                                                       &
+            atpco2in 
+
+! Input arrays (nbox dimensions)
+       REAL(KIND=wp), dimension (nbox) ::                              & 
+            dx,                                                        &
+            dy,                                                        &
+            dz,                                                        &
+            thin,                                                       & 
+            sain,                                                       &
+            cain,                                                       & 
+            alin,                                                       & 
+            phin,                                                       & 
+            niin,                                                       & 
+            fein,                                                       & 
+            liin,                                                       & 
+            fe_input,                                                  &
+            dlambdadz,                                                 &
+            wind,                                                      &
+            fopen
+
+       REAL(KIND=wp), dimension (nbox, nbox) ::                        & 
+            K,                                                         &
+            R
+            
+! Output arrays (nbox, by timestep dimensions)
        REAL(KIND=wp), dimension (:,:), allocatable ::                  &
             thout,                                                     &
             sout,                                                      &
@@ -93,7 +83,7 @@
             nlout
        
        ! Input some initial parameters
-       maxyears   = 1.e5_wp
+       maxyears   = 1.e4_wp
        outputyears= 1.e2_wp
        outstepmax = int((maxyears/outputyears)+1)
        
@@ -112,35 +102,52 @@
        allocate ( lout      (outstepmax,nbox) )
        allocate ( expout    (outstepmax,nbox) )
        allocate ( pco2out   (outstepmax,nbox) )
+
+       ! Geometry and array inputs
+       dx   = [ 17.0e6_wp, 17.0e6_wp,   17.0e6_wp ]
+       dy   = [  4.0e6_wp, 12.0e6_wp,   16.0e6_wp ]  
+       dz   = [ 50.0_wp  , 50.0_wp  , 5050.0_wp   ]
+
+       ! define array of mixing rates
+       K = RESHAPE( [  0.e6_wp, 1.e6_wp, 1.e6_wp,                       &
+                       1.e6_wp, 0.e6_wp, 1.e6_wp,                       &
+                       1.e6_wp, 1.e6_wp, 0.e6_wp ],                     &
+                       [ nbox, nbox ] )
        
-       ! Input arguements
-       t1in   =    2._wp
-       t2in   =   20._wp
-       t3in   =    4._wp
-       s1in   =   34._wp
-       s2in   =   35.50_wp
-       s3in   =   34.75_wp
+       ! define array of remineralization coefficients (Columnwise)
+       ! -1 indicates all of export is lost from cell, while 
+       ! +1 indicates all of export is remineralized (gained) by cell
+       ! Thus [-1.0, 0.0, 1.0,                                   &
+       !        0.0,-1.0, 1.0,                                   &
+       !        0.0, 0.0, 0.0 ],  
+       ! indicates the first box (column one) loses export from box 1,
+       !           the second box (col two) loses export from box 2,
+       !       and the third box (col three) gains export from boxes 1 and 2 
+       R = RESHAPE([ -1._wp, 0._wp, 1._wp,                              &
+                      0._wp,-1._wp, 1._wp,                              &
+                      0._wp, 0._wp, 0._wp ],                            &
+                      [ nbox, nbox ] )
+                    
+       ! Initialize input arguements, and set some reasonable values
+       thin     =      0._wp
+       sain     =     34._wp
+       cain     =   2150._wp
+       alin     =   2350._wp
+       phin     =      1._wp
+       niin     =     16._wp
+       fein     =      0._wp
+       liin     =      0._wp
+       
+       thin(1:3)= [    2._wp,   20._wp  ,    4._wp   ]
+       sain(1:3)= [   34._wp,   35.50_wp,   34.75_wp ]
        ! Initial concentrations in (u/n)mol/kg
        ! Make sure to compile with -DFIXATMPCO2 first
-       c1in   = 2100._wp
-       c2in   = 2100._wp
-       c3in   = 2350._wp
-       a1in   = 2300._wp
-       a2in   = 2300._wp
-       a3in   = 2400._wp
-       p1in   =    2._wp
-       p2in   =    0._wp
-       p3in   =    2.5_wp
-       n1in   =   32._wp
-       n2in   =    0._wp
-       n3in   =   36._wp
-       f1in   =    0._wp
-       f2in   =    0._wp
-       f3in   =    0._wp
-       l1in   =    0._wp
-       l2in   =    0._wp
-       l3in   =    0._wp
-       atpco2in =  280._wp
+       cain(1:3)= [ 2100._wp, 2100._wp  , 2350._wp   ]
+       alin(1:3)= [ 2300._wp, 2300._wp  , 2400._wp   ]
+       phin(1:3)= [    2._wp,    0._wp  ,    2.5_wp  ]
+       niin(1:3)= [   32._wp,    0._wp  ,   36._wp   ]
+
+       atpco2in =    280._wp
 
        ! Initial concentrations in (u/n)mol/kg
        ! Here are some equilibrated values run for 100,000 yrs (round-off error notwithstanding)
@@ -167,57 +174,56 @@
 
        ! Input some example parameters
        ! Wind speed (m/s)for CO2 gas fluxes
-       wind1 = 10._wp
-       wind2 = 5._wp
-       wind3 = 0._wp
+       wind         =    0._wp
+       wind(1:3)    = [ 10._wp, 5._wp, 0._wp ]
        
        ! Open surface fraction in contact with atmoshpere 
        !  1 => fully open, <1 => flux impeded (e.g. by sea ice)
-       fopen1 = 1._wp
-       fopen2 = 1._wp
-       fopen3 = 0._wp
+       fopen        =   0._wp 
+       fopen(1:3)   = [ 1._wp, 1._wp, 0._wp ]
        
        ! Gamma over lambda for ligands "optimum" value (Lauderdale et al 2020)
-       gaovla_opt = 4398._wp
+       gaovla_opt   = 4398._wp
        ! Gamma ligand production rate (in phosphate, not carbon, units)
-       gamma_Fe    = 5.e-5_wp*106._wp
+       gamma_Fe     =   5.e-5_wp*106._wp
        ! Lambda ligand lifetime (s)
-       lt_lifetime =  1._wp/((gamma_Fe/106._wp)/gaovla_opt)
+       lt_lifetime  =   1._wp/((gamma_Fe/106._wp)/gaovla_opt)
        ! Dust deposition in g Fe m-2 year-1
-       fe_input1    = 1.5e-3_wp
-       fe_input2    = 1.5e-1_wp
+       fe_input     =   0._wp
+       fe_input(1:3)= [ 1.5e-3_wp, 1.5e-1_wp,                          &
        ! Hydrothermal vent input of 1 Gmol/yr (Tagliabue et al., 2010)
        ! mol Fe/yr * g/mol * 1/area  == g Fe m-2 year-1....
        !divide by 2.5e-3 because fe_sol is multiplied again within model.
-       fe_input3    = (1.e9_wp*56._wp)/(17.e6_wp*16.e6_wp*2.5e-3_wp)
+        (1.e9_wp*56._wp)/(17.e6_wp*16.e6_wp*2.5e-3_wp) ]
 
        ! Biological production maximum rate (mol P/yr)
-       alpha_yr     = 6.e-6_wp
+       alpha_yr      = 6.e-6_wp
        ! Deep ocean box lifetime modifier to capture the gradient due to
        ! photodegradation near the surface and slower loss in the deep
-       dlambdadz1   = 1._wp
-       dlambdadz2   = 1._wp
-       dlambdadz3   = 1.e-2_wp
+       dlambdadz     =   1._wp
+       dlambdadz(1:3)= [ 1._wp, 1._wp, 1.e-2_wp ]
        ! Overturning rate (m3/s)
-       psi         = 20.0e6_wp
+       psi           = 20.0e6_wp
        ! File number identifier
-       id          = 1
+       id            = 1
             
        call model(id, maxyears, outputyears, outstepmax,               &
+            dx, dy, dz,                                                &
+            K, R,                                                      &
             psi, alpha_yr,                                             &
             gamma_Fe, lt_lifetime,                                     &
-            (/dlambdadz1,dlambdadz2,dlambdadz3/),                      &
-            (/fe_input1 ,fe_input2 ,fe_input3 /),                      &
-            (/wind1,wind2,wind3/),                                     &
-            (/fopen1,fopen2,fopen3/),                                  &
-            (/t1in,t2in,t3in/),                                        &
-            (/s1in,s2in,s3in/),                                        &
-            (/c1in,c2in,c3in/),                                        &
-            (/a1in,a2in,a3in/),                                        &
-            (/p1in,p2in,p3in/),                                        &
-            (/n1in,n2in,n3in/),                                        &
-            (/f1in,f2in,f3in/),                                        &
-            (/l1in,l2in,l3in/),                                        &
+            dlambdadz,                                                 &
+            fe_input,                                                  &
+            wind,                                                      &
+            fopen,                                                     &
+            thin,                                                      &
+            sain,                                                      &
+            cain,                                                      &
+            alin,                                                      &
+            phin,                                                      &
+            niin,                                                      &
+            fein,                                                      &
+            liin,                                                      &
             atpco2in,                                                  &
             tout,                                                      &
             thout,                                                     &
@@ -232,7 +238,8 @@
             nlout,                                                     &
             psout,                                                     &
             pco2out,                                                   &
-            atpco2out)
+            atpco2out                                                  &           
+            )
 
 !=======================================================================
        END PROGRAM MICROCOSM_MODEL

@@ -1,30 +1,43 @@
-
 .SUFFIXES:
-
-.SUFFIXES: .o .f90 .F90
+.SUFFIXES: .o .mod .f90 .F90 .f
 
 RM = /bin/rm -f
+CP = /bin/cp -f
 
 FC = gfortran
 PC = f2py
-FFLAGS = '-O3'
+override FFLAGS += -g
 OPTIONDEFS = -DWRITEOUTFILE
 
-MODULE_OBJS_MICROCOSM = mod_precision.o mod_dimensions.o mod_common.o mod_chemconst.o mod_chemspeciation.o mod_phsolvers.o mod_carbonchem.o mod_modelmain.o
-MODULE_F90_MICROCOSM = mod_precision.f90 mod_dimensions.f90 mod_common.f90 mod_chemconst.f90 mod_chemspeciation.f90 mod_phsolvers.F90 mod_carbonchem.f90 mod_modelmain.F90
+DNAD_OBJ = dnad/dnad.o
 
-default: $(MODULE_OBJS)
+MODULE_OBJ = mod_precision.o mod_dimensions.o         \
+             mod_common.o    mod_chemconst.o          \
+             mod_chemspeciation.o mod_phsolvers.o     \
+             mod_carbonchem.o mod_modelmain.o
+             
+MODEL_OBJ  = microcosm_model.o
 
-model: $(MODULE_OBJS_MICROCOSM) microcosm_model.o
-	$(FC) $(OPTIONDEFS) $(FFLAGS) $(MODULE_OBJS_MICROCOSM) microcosm_model.o -o microCOSM 
+# C preprocessing 
+CPPCMD = cat $< | $(FC) $(OPTIONDEFS) -cpp -P -E $(FFLAGS)
 
-pymodel: $(MODULE_OBJS_MICROCOSM) microcosm_model.o
-	$(PC) $(OPTIONDEFS) --opt=$(FFLAGS) -m microCOSM -c $(MODULE_F90_MICROCOSM) microcosm_model.F90
-.f90.o:;
-	$(FC) $(OPTIONDEFS) -c $(FFLAGS) $*.f90 -o $*.o
+model: $(MODULE_OBJ) $(MODEL_OBJ)
+	$(FC) $(OPTIONDEFS) $(FFLAGS) $(MODULE_OBJ) $(MODEL_OBJ) -o microCOSM 
 
-.F90.o:;
-	$(FC) $(OPTIONDEFS) -c $(FFLAGS) $*.F90 -o $*.o
+# Requires seperate pre-processing for some reason
+pymodel: $(MODULE_OBJ:.o=.f) $(MODEL_OBJ:.o=.f)
+	$(PC) $(OPTIONDEFS) --opt=$(FFLAGS) --f90flags=-ffree-form -m microCOSM -c $(MODULE_OBJ:.o=.f) $(MODEL_OBJ:.o=.f)
 
+#%.o: %.F90
+#	$(FC) $(OPTIONDEFS) -c $(FFLAGS) $< -o $@
+	
+%.f: %.F90
+	$(CPPCMD) -o $@ -
+%.o: %.f
+	$(FC) $(OPTIONDEFS) -c $(FFLAGS) -ffree-form  $< -o $@
+
+.PHONY : clean
 clean:
-	$(RM) *.o *.mod
+	$(RM) $(MODULE_OBJ)         $(DNAD_OBJ)         $(MODEL_OBJ)
+	$(RM) $(MODULE_OBJ:.o=.mod) $(DNAD_OBJ:.o=.mod) $(MODEL_OBJ:.o=.mod)
+	$(RM) $(MODULE_OBJ:.o=.f)   $(DNAD_OBJ:.o=.f)   $(MODEL_OBJ:.o=.f)

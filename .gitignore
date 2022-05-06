@@ -1,4 +1,10 @@
 microCOSM
+.DS_Store
+*.pdf
+*.json*
+
+*.dSYM
+bkup_*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

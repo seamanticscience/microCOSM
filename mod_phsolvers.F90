@@ -1,3 +1,4 @@
+! -*- f90 -*-
 !
 !    Copyright 2013 Guy Munhoven
 !
@@ -39,8 +40,8 @@
 
 
 MODULE MOD_PHSOLVERS
-
 USE MOD_PRECISION
+USE MOD_COMMON, ONLY: zero, one, two, three, four, nine, ten, hundred
 
 IMPLICIT NONE
 
@@ -123,28 +124,28 @@ REAL(KIND=wp), INTENT(OUT) :: p_alknw_sup
 
 ! p_alknw_inf = -\Sum_i m_i Xtot_i
 
-! p_alknw_inf =-p_dictot*0._wp &          ! n = 2, m = 0
-!              -p_bortot*0._wp &          ! n = 1, m = 0
-!              -p_po4tot*1._wp &          ! n = 3, m = 1
-!              -p_siltot*0._wp &          ! n = 1, m = 0
-!              -p_nh4tot*0._wp &          ! n = 1, m = 0
-!              -p_h2stot*0._wp &          ! n = 1, m = 0
-!              -p_so4tot*1._wp &          ! n = 1, m = 1
-!              -p_flutot*1._wp            ! n = 1, m = 1
+! p_alknw_inf =-p_dictot*zero &          ! n = 2, m = 0
+!              -p_bortot*zero &          ! n = 1, m = 0
+!              -p_po4tot*one &          ! n = 3, m = 1
+!              -p_siltot*zero &          ! n = 1, m = 0
+!              -p_nh4tot*zero &          ! n = 1, m = 0
+!              -p_h2stot*zero &          ! n = 1, m = 0
+!              -p_so4tot*one &          ! n = 1, m = 1
+!              -p_flutot*one            ! n = 1, m = 1
 
 p_alknw_inf =    -p_po4tot - p_so4tot - p_flutot
 
 
 ! p_alknw_sup = \Sum_i (n_i - m_i) Xtot_i
 
-! p_alknw_sup = p_dictot*(2._wp-0._wp) &  ! n = 2, m = 0
-!               p_bortot*(1._wp-0._wp) &  ! n = 1, m = 0
-!               p_po4tot*(3._wp-1._wp) &  ! n = 3, m = 1
-!               p_siltot*(1._wp-0._wp) &  ! n = 1, m = 0
-!               p_nh4tot*(1._wp-0._wp) &  ! n = 1, m = 0
-!               p_h2stot*(1._wp-0._wp) &  ! n = 1, m = 0
-!               p_so4tot*(1._wp-1._wp) &  ! n = 1, m = 1
-!               p_flutot*(1._wp-1._wp)    ! n = 1, m = 1
+! p_alknw_sup = p_dictot*(two-zero) &  ! n = 2, m = 0
+!               p_bortot*(one-zero) &  ! n = 1, m = 0
+!               p_po4tot*(three-one) &  ! n = 3, m = 1
+!               p_siltot*(one-zero) &  ! n = 1, m = 0
+!               p_nh4tot*(one-zero) &  ! n = 1, m = 0
+!               p_h2stot*(one-zero) &  ! n = 1, m = 0
+!               p_so4tot*(one-one) &  ! n = 1, m = 1
+!               p_flutot*(one-one)    ! n = 1, m = 1
 
 p_alknw_sup =   p_dictot + p_dictot + p_bortot &
               + p_po4tot + p_po4tot + p_siltot &
@@ -210,8 +211,8 @@ REAL(KIND=wp) ::                                      zalk_wat, zdalk_wat
 
 
 ! H2CO3 - HCO3 - CO3 : n=2, m=0
-znumer_dic = 2._wp*api2_dic + p_h*       api1_dic
-zdenom_dic =       api2_dic + p_h*(      api1_dic + p_h)
+znumer_dic = two*api2_dic + p_h*       api1_dic
+zdenom_dic =     api2_dic + p_h*(      api1_dic + p_h)
 zalk_dic   = p_dictot * (znumer_dic/zdenom_dic)
 
 ! B(OH)3 - B(OH)4 : n=1, m=0
@@ -220,9 +221,9 @@ zdenom_bor =       api1_bor + p_h
 zalk_bor   = p_bortot * (znumer_bor/zdenom_bor)
 
 ! H3PO4 - H2PO4 - HPO4 - PO4 : n=3, m=1
-znumer_po4 = 3._wp*api3_po4 + p_h*(2._wp*api2_po4 + p_h* api1_po4)
-zdenom_po4 =       api3_po4 + p_h*(      api2_po4 + p_h*(api1_po4 + p_h))
-zalk_po4   = p_po4tot * (znumer_po4/zdenom_po4 - 1._wp) ! Zero level of H3PO4 = 1
+znumer_po4 = three*api3_po4 + p_h*(two*api2_po4 + p_h* api1_po4)
+zdenom_po4 =       api3_po4 + p_h*(    api2_po4 + p_h*(api1_po4 + p_h))
+zalk_po4   = p_po4tot * (znumer_po4/zdenom_po4 - one) ! Zero level of H3PO4 = 1
 
 ! H4SiO4 - H3SiO4 : n=1, m=0
 znumer_sil =       api1_sil
@@ -242,12 +243,12 @@ zalk_h2s   = p_h2stot * (znumer_h2s/zdenom_h2s)
 ! HSO4 - SO4 : n=1, m=1
 znumer_so4 =       api1_so4
 zdenom_so4 =       api1_so4 + p_h
-zalk_so4   = p_so4tot * (znumer_so4/zdenom_so4 - 1._wp)
+zalk_so4   = p_so4tot * (znumer_so4/zdenom_so4 - one)
 
 ! HF - F : n=1, m=1
 znumer_flu =       api1_flu
 zdenom_flu =       api1_flu + p_h
-zalk_flu   = p_flutot * (znumer_flu/zdenom_flu - 1._wp)
+zalk_flu   = p_flutot * (znumer_flu/zdenom_flu - one)
 
 ! H2O - OH
 zalk_wat   = api1_wat/p_h - p_h/aphscale
@@ -261,8 +262,8 @@ EQUATION_AT =    zalk_dic + zalk_bor + zalk_po4 + zalk_sil &
 IF(PRESENT(p_deriveqn)) THEN
 
    ! H2CO3 - HCO3 - CO3 : n=2
-   zdnumer_dic = api1_dic*api2_dic + p_h*(4._wp*api2_dic                       &
-                                   + p_h*       api1_dic)
+   zdnumer_dic = api1_dic*api2_dic + p_h*(four*api2_dic                       &
+                                   + p_h*      api1_dic)
    zdalk_dic   = -p_dictot*(zdnumer_dic/zdenom_dic**2)
 
    ! B(OH)3 - B(OH)4 : n=1
@@ -270,10 +271,10 @@ IF(PRESENT(p_deriveqn)) THEN
    zdalk_bor   = -p_bortot*(zdnumer_bor/zdenom_bor**2)
 
    ! H3PO4 - H2PO4 - HPO4 - PO4 : n=3
-   zdnumer_po4 = api2_po4*api3_po4 + p_h*(4._wp*api1_po4*api3_po4              &
-                                   + p_h*(9._wp*api3_po4 + api1_po4*api2_po4   &
-                                   + p_h*(4._wp*api2_po4                       &
-                                   + p_h*       api1_po4)))
+   zdnumer_po4 = api2_po4*api3_po4 + p_h*(four*api1_po4*api3_po4              &
+                                   + p_h*(nine*api3_po4 + api1_po4*api2_po4   &
+                                   + p_h*(four*api2_po4                       &
+                                   + p_h*      api1_po4)))
    zdalk_po4   = -p_po4tot * (zdnumer_po4/zdenom_po4**2)
 
    ! H4SiO4 - H3SiO4 : n=1
@@ -298,7 +299,7 @@ IF(PRESENT(p_deriveqn)) THEN
 
    p_deriveqn =   zdalk_dic + zdalk_bor + zdalk_po4 + zdalk_sil &
                 + zdalk_nh4 + zdalk_h2s + zdalk_so4 + zdalk_flu &
-                - api1_wat/p_h**2 - 1._wp/aphscale
+                - api1_wat/p_h**2 - one/aphscale
 ENDIF
 
 RETURN
@@ -349,31 +350,31 @@ REAL(KIND=wp)  ::  za2, za1, za0
 !==============================================================================
 
 
-IF (p_alkcb <= 0._wp) THEN
+IF (p_alkcb <= zero) THEN
   p_hini = 1.e-3_wp
-ELSEIF (p_alkcb >= (2._wp*p_dictot + p_bortot)) THEN
+ELSEIF (p_alkcb >= (two*p_dictot + p_bortot)) THEN
   p_hini = 1.e-10_wp
 ELSE
   zca = p_dictot/p_alkcb
   zba = p_bortot/p_alkcb
 
   ! Coefficients of the cubic polynomial
-  za2 = api1_bor*(1._wp - zba) + api1_dic*(1._wp-zca)
-  za1 = api1_dic*api1_bor*(1._wp - zba - zca) + api2_dic*(1._wp - (zca+zca))
-  za0 = api2_dic*api1_bor*(1._wp - zba - (zca+zca))
+  za2 = api1_bor*(one - zba) + api1_dic*(one-zca)
+  za1 = api1_dic*api1_bor*(one - zba - zca) + api2_dic*(one - (zca+zca))
+  za0 = api2_dic*api1_bor*(one - zba - (zca+zca))
 
 
                                         ! Taylor expansion around the minimum
 
-  zd = za2*za2 - 3._wp*za1              ! Discriminant of the quadratic equation
+  zd = za2*za2 - three*za1              ! Discriminant of the quadratic equation
                                         ! for the minimum close to the root
 
-  IF(zd > 0._wp) THEN                   ! If the discriminant is positive
+  IF(zd > zero) THEN                   ! If the discriminant is positive
 
     zsqrtd = SQRT(zd)
 
     IF(za2 < 0) THEN
-      zhmin = (-za2 + zsqrtd)/3._wp
+      zhmin = (-za2 + zsqrtd)/three
     ELSE
       zhmin = -za1/(za2 + zsqrtd)
     ENDIF
@@ -473,21 +474,21 @@ ENDIF
                  p_so4tot, p_flutot,                                           &
                  zalknw_inf, zalknw_sup)
 
-zdelta = (p_alktot-zalknw_inf)**2 + 4._wp*api1_wat/aphscale
+zdelta = (p_alktot-zalknw_inf)**2 + four*api1_wat/aphscale
 
 IF(p_alktot >= zalknw_inf) THEN
-   zh_min = 2._wp*api1_wat /( p_alktot-zalknw_inf + SQRT(zdelta) )
+   zh_min = two*api1_wat /( p_alktot-zalknw_inf + SQRT(zdelta) )
 ELSE
-   zh_min = aphscale*(-(p_alktot-zalknw_inf) + SQRT(zdelta) ) / 2._wp
+   zh_min = aphscale*(-(p_alktot-zalknw_inf) + SQRT(zdelta) ) / two
 ENDIF
 
 
-zdelta = (p_alktot-zalknw_sup)**2 + 4._wp*api1_wat/aphscale
+zdelta = (p_alktot-zalknw_sup)**2 + four*api1_wat/aphscale
 
 IF(p_alktot <= zalknw_sup) THEN
-   zh_max = aphscale*(-(p_alktot-zalknw_sup) + SQRT(zdelta) ) / 2._wp
+   zh_max = aphscale*(-(p_alktot-zalknw_sup) + SQRT(zdelta) ) / two
 ELSE
-   zh_max = 2._wp*api1_wat /( p_alktot-zalknw_sup + SQRT(zdelta) )
+   zh_max = two*api1_wat /( p_alktot-zalknw_sup + SQRT(zdelta) )
 ENDIF
 
 #if defined(DEBUG_PHSOLVERS)
@@ -507,7 +508,7 @@ zeqn_absmin        = HUGE(1._wp)
 DO
 
    IF(niter_atgen >= jp_maxniter_atgen) THEN
-      zh = -1._wp
+      zh = -one
       EXIT
    ENDIF
 
@@ -518,9 +519,9 @@ DO
                       p_so4tot, p_flutot, P_DERIVEQN = zdeqndh)
 
    ! Adapt bracketing interval
-   IF(zeqn > 0._wp) THEN
+   IF(zeqn > zero) THEN
       zh_min = zh_prev
-   ELSEIF(zeqn < 0._wp) THEN
+   ELSEIF(zeqn < zero) THEN
       zh_max = zh_prev
    ELSE
       ! zh is the root; unlikely but, one never knows
@@ -642,7 +643,7 @@ SOLVE_AT_GENERAL = zh
 
 IF(PRESENT(p_val)) THEN
 
-   IF(zh > 0._wp) THEN
+   IF(zh > zero) THEN
 
       p_val = EQUATION_AT(p_alktot, zh,       p_dictot, p_bortot,              &
                           p_po4tot, p_siltot, p_nh4tot, p_h2stot,              &
@@ -717,9 +718,9 @@ zdenom_bor =       api1_bor + p_h
 zalk_bor   = p_bortot * (znumer_bor/zdenom_bor)
 
 ! H3PO4 - H2PO4 - HPO4 - PO4 : n=3, m=1
-znumer_po4 = 3._wp*api3_po4 + p_h*(2._wp*api2_po4 + p_h* api1_po4)
-zdenom_po4 =       api3_po4 + p_h*(      api2_po4 + p_h*(api1_po4 + p_h))
-zalk_po4   = p_po4tot * (znumer_po4/zdenom_po4 - 1._wp) ! Zero level of H3PO4 = 1
+znumer_po4 = three*api3_po4 + p_h*(two*api2_po4 + p_h* api1_po4)
+zdenom_po4 =       api3_po4 + p_h*(    api2_po4 + p_h*(api1_po4 + p_h))
+zalk_po4   = p_po4tot * (znumer_po4/zdenom_po4 - one) ! Zero level of H3PO4 = 1
 
 ! H4SiO4 - H3SiO4 : n=1, m=0
 znumer_sil =       api1_sil
@@ -739,12 +740,12 @@ zalk_h2s   = p_h2stot * (znumer_h2s/zdenom_h2s)
 ! HSO4 - SO4 : n=1, m=1
 znumer_so4 =       api1_so4
 zdenom_so4 =       api1_so4 + p_h
-zalk_so4   = p_so4tot * (znumer_so4/zdenom_so4 - 1._wp)
+zalk_so4   = p_so4tot * (znumer_so4/zdenom_so4 - one)
 
 ! HF - F : n=1, m=1
 znumer_flu =       api1_flu
 zdenom_flu =       api1_flu + p_h
-zalk_flu   = p_flutot * (znumer_flu/zdenom_flu - 1._wp)
+zalk_flu   = p_flutot * (znumer_flu/zdenom_flu - one)
 
 ! H2O - OH
 zalk_wat   = api1_wat/p_h - p_h/aphscale
@@ -796,22 +797,22 @@ REAL(KIND=wp)  ::  zca, zsqrtdelta, za1, za0
 !==============================================================================
 
 
-IF((p_alkc <= 0._wp) .OR. (p_alkc >= (p_dictot+p_dictot))) THEN
+IF((p_alkc <= zero) .OR. (p_alkc >= (p_dictot+p_dictot))) THEN
 
-  SOLVE_AC = -1._wp
+  SOLVE_AC = -one
 
 ELSE
 
   zca = p_dictot/p_alkc
-  za1 = api1_dic*(1._wp - zca)
-  za0 = api2_dic*(1._wp - zca - zca)
+  za1 = api1_dic*(one - zca)
+  za0 = api2_dic*(one - zca - zca)
 
-  zsqrtdelta = SQRT(za1**2 - 4._wp*za0)
+  zsqrtdelta = SQRT(za1**2 - four*za0)
 
-  IF(za1 > 0._wp) THEN
-    SOLVE_AC = -2._wp*za0/( za1 + zsqrtdelta )
+  IF(za1 > zero) THEN
+    SOLVE_AC = -two*za0/( za1 + zsqrtdelta )
   ELSE
-    SOLVE_AC = ( -za1 + zsqrtdelta )/2._wp
+    SOLVE_AC = ( -za1 + zsqrtdelta )/two
   ENDIF
 
 ENDIF
@@ -903,7 +904,7 @@ DO
    niter_icacfp = niter_icacfp + 1
 
    IF(niter_icacfp > jp_maxniter_icacfp) THEN
-      zh = -1._wp
+      zh = -one
       EXIT
    ENDIF
 
@@ -916,7 +917,7 @@ DO
 
    zh = SOLVE_AC(zalk_dic, p_dictot)
 
-   IF(zh < 0._wp) THEN
+   IF(zh < zero) THEN
                                        ! IF zh < 0,  the quadratic equation
                                        ! in DIC and ALK_C does not have any
                                        ! positive root.
@@ -939,7 +940,7 @@ SOLVE_AT_ICACFP = zh
 
 IF(PRESENT(p_val)) THEN
 
-   IF(zh > 0._wp) THEN
+   IF(zh > zero) THEN
 
      p_val = EQUATION_AT(p_alktot, zh,       p_dictot, p_bortot,               &
                          p_po4tot, p_siltot, p_nh4tot, p_h2stot,               &
@@ -1048,7 +1049,7 @@ zalk_dic = AC_FROM_AT(p_alktot, zh_1,                p_bortot,                 &
 
 zfh_1 = SOLVE_AC(zalk_dic, p_dictot)
 
-IF(zfh_1 < 0._wp) THEN
+IF(zfh_1 < zero) THEN
                                        ! IF zfh_1 < 0, the quadratic equation
                                        ! in DIC and ALK_C does not have any
                                        ! positive root => return to caller
@@ -1090,7 +1091,7 @@ zalk_dic = AC_FROM_AT(p_alktot, zh,                  p_bortot,                 &
 
 zfh = SOLVE_AC(zalk_dic, p_dictot)
 
-IF(zfh < 0._wp) THEN
+IF(zfh < zero) THEN
                                        ! IF zfh < 0, the quadratic equation
                                        ! in DIC and ALK_C does not have any
                                        ! positive root => return to caller
@@ -1139,7 +1140,7 @@ DO
    niter_bacastow = niter_bacastow + 1
 
    IF(niter_bacastow > jp_maxniter_bacastow) THEN
-      zfh = -1._wp
+      zfh = -one
       EXIT
    ENDIF
 
@@ -1198,7 +1199,7 @@ DO
 #endif
 
 
-   IF(zfh < 0._wp) THEN
+   IF(zfh < zero) THEN
                                        ! IF zfh < 0, there is no solution to the quadratic
                                        ! equation in DIC and ALK_C => return to caller
      l_exitnow = .TRUE.
@@ -1226,7 +1227,7 @@ SOLVE_AT_BACASTOW = zfh
 
 IF(PRESENT(p_val)) THEN
 
-   IF(zfh > 0._wp) THEN
+   IF(zfh > zero) THEN
 
      p_val = EQUATION_AT(p_alktot, zfh,      p_dictot, p_bortot,               &
                          p_po4tot, p_siltot, p_nh4tot, p_h2stot,               &
@@ -1324,21 +1325,21 @@ ENDIF
                  p_so4tot, p_flutot,                                      &
                  zalknw_inf, zalknw_sup)
 
-zdelta = (p_alktot-zalknw_inf)**2 + 4._wp*api1_wat/aphscale
+zdelta = (p_alktot-zalknw_inf)**2 + four*api1_wat/aphscale
 
 IF(p_alktot >= zalknw_inf) THEN
-   zh_min = 2._wp*api1_wat /( p_alktot-zalknw_inf + SQRT(zdelta) )
+   zh_min = two*api1_wat /( p_alktot-zalknw_inf + SQRT(zdelta) )
 ELSE
-   zh_min = aphscale*(-(p_alktot-zalknw_inf) + SQRT(zdelta) ) / 2._wp
+   zh_min = aphscale*(-(p_alktot-zalknw_inf) + SQRT(zdelta) ) / two
 ENDIF
 
 
-zdelta = (p_alktot-zalknw_sup)**2 + 4._wp*api1_wat/aphscale
+zdelta = (p_alktot-zalknw_sup)**2 + four*api1_wat/aphscale
 
 IF(p_alktot <= zalknw_sup) THEN
-   zh_max = aphscale*(-(p_alktot-zalknw_sup) + SQRT(zdelta) ) / 2._wp
+   zh_max = aphscale*(-(p_alktot-zalknw_sup) + SQRT(zdelta) ) / two
 ELSE
-   zh_max = 2._wp*api1_wat /( p_alktot-zalknw_sup + SQRT(zdelta) )
+   zh_max = two*api1_wat /( p_alktot-zalknw_sup + SQRT(zdelta) )
 ENDIF
 
 #if defined(DEBUG_PHSOLVERS)
@@ -1376,7 +1377,7 @@ zeqn_absmin        = ABS(zeqn_2)
 
 ! Adapt bracketing interval and heuristically set zh_1
 
-IF(zeqn_2 < 0._wp) THEN
+IF(zeqn_2 < zero) THEN
                                        ! If zeqn_2 < 0, then we adjust zh_max:
                                        ! we can be sure that zh_min < zh_2 < zh_max.
    zh_max = zh_2
@@ -1385,7 +1386,7 @@ IF(zeqn_2 < 0._wp) THEN
                                        ! to a bisection step on [pH@zh_min, pH@zh_max]
    zh_1   = MAX(zh_max/1.25_wp, SQRT(zh_min*zh_max))
 
-ELSEIF(zeqn_2 > 0._wp) THEN
+ELSEIF(zeqn_2 > zero) THEN
                                        ! If zeqn_2 < 0, then we adjust zh_min:
                                        ! we can be sure that zh_min < zh_2 < zh_max.
    zh_min = zh_2
@@ -1417,11 +1418,11 @@ zeqn_1 = EQUATION_AT(p_alktot, zh_1,       p_dictot, p_bortot,                 &
 ! Adapt bracketing interval: we know that zh_1 <= zh <= zh_max (if zeqn_1 > 0)
 ! or zh_min <= zh <= zh_1 (if zeqn_1 < 0), so this can always be done
 
-IF(zeqn_1 > 0._wp) THEN
+IF(zeqn_1 > zero) THEN
 
    zh_min = zh_1
 
-ELSEIF(zeqn_1 < 0._wp) THEN
+ELSEIF(zeqn_1 < zero) THEN
 
    zh_max = zh_1
 
@@ -1482,7 +1483,7 @@ ENDIF
 DO
 
    IF(niter_atsec >= jp_maxniter_atsec) THEN
-      zh = -1._wp
+      zh = -one
       EXIT
    ENDIF
 
@@ -1493,9 +1494,9 @@ DO
    ! Adapt bracketing interval: since initially, zh_min <= zh <= zh_max
    ! we are sure that zh will improve either bracket, depending on the sign
    ! of zeqn
-   IF(zeqn > 0._wp) THEN
+   IF(zeqn > zero) THEN
      zh_min = zh
-   ELSEIF(zeqn < 0._wp) THEN
+   ELSEIF(zeqn < zero) THEN
      zh_max = zh
    ELSE
      ! zh is the root
@@ -1596,7 +1597,7 @@ SOLVE_AT_GENERAL_SEC = zh
 
 IF(PRESENT(p_val)) THEN
 
-   IF(zh > 0._wp) THEN
+   IF(zh > zero) THEN
 
       p_val = EQUATION_AT(p_alktot, zh,       p_dictot, p_bortot,              &
                           p_po4tot, p_siltot, p_nh4tot, p_h2stot,              &
@@ -1720,11 +1721,11 @@ zeqn_min = EQUATION_AT(p_alktot, zh_high,  p_dictot, p_bortot,                 &
                        p_po4tot, p_siltot, p_nh4tot, p_h2stot,                 &
                        p_so4tot, p_flutot)
 
-IF((zeqn_max < 0._wp) .OR. (zeqn_min > 0._wp)) THEN
+IF((zeqn_max < zero) .OR. (zeqn_min > zero)) THEN
 
    ! [zh_low, zh_high] does not bracket the root
    ! return to caller
-   SOLVE_AT_OCMIP = -1._wp
+   SOLVE_AT_OCMIP = -one
    IF(PRESENT(p_val)) p_val = HUGE(1._wp)
    RETURN
 
@@ -1743,13 +1744,13 @@ DO
    niter_ocmip = niter_ocmip + 1
 
    IF(niter_ocmip > jp_maxniter_ocmip) THEN ! too many iterations
-      zh = -1._wp
+      zh = -one
       EXIT
    ENDIF
 
    zh_prev = zh
 
-   IF(      ( ((zh-zh_low)*zdeqndh-zeqn)*((zh-zh_high)*zdeqndh-zeqn) > 0._wp ) &
+   IF(      ( ((zh-zh_low)*zdeqndh-zeqn)*((zh-zh_high)*zdeqndh-zeqn) > zero ) &
        .OR. ( ABS(2.0*zeqn) > ABS(zh_delta_prev*zdeqndh)) ) THEN
       
       zh_delta_prev = zh_delta
@@ -1778,7 +1779,7 @@ DO
                       p_po4tot, p_siltot, p_nh4tot, p_h2stot,                  &
                       p_so4tot, p_flutot, P_DERIVEQN = zdeqndh)
 
-   IF(zeqn < 0._wp) THEN
+   IF(zeqn < zero) THEN
 
       zh_high  = zh
 
@@ -1795,7 +1796,7 @@ SOLVE_AT_OCMIP = zh
 
 IF(PRESENT(p_val)) THEN
 
-   IF(zh > 0._wp) THEN
+   IF(zh > zero) THEN
 
       p_val = EQUATION_AT(p_alktot, zh,       p_dictot, p_bortot,              &
                           p_po4tot, p_siltot, p_nh4tot, p_h2stot,              &
@@ -1894,7 +1895,7 @@ DO
    niter_atfast = niter_atfast + 1
 
    IF(niter_atfast > jp_maxniter_atfast) THEN
-      zh = -1._wp
+      zh = -one
       EXIT
    ENDIF
 
@@ -1904,7 +1905,7 @@ DO
                       p_po4tot, p_siltot, p_nh4tot, p_h2stot,                  &
                       p_so4tot, p_flutot, P_DERIVEQN = zdeqndh)
 
-   IF(zeqn == 0._wp) EXIT               ! zh is the root
+   IF(zeqn == zero) EXIT               ! zh is the root
 
    zh_lnfactor = -zeqn/(zdeqndh*zh_prev)
    IF(ABS(zh_lnfactor) > pz_exp_threshold) THEN
@@ -1944,7 +1945,7 @@ SOLVE_AT_FAST = zh
 
 IF(PRESENT(p_val)) THEN
 
-   IF(zh > 0._wp) THEN
+   IF(zh > zero) THEN
 
       p_val = EQUATION_AT(p_alktot, zh,       p_dictot, p_bortot,              &
                           p_po4tot, p_siltot, p_nh4tot, p_h2stot,              &

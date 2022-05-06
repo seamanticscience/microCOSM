@@ -1,3 +1,4 @@
+! -*- f90 -*-
        MODULE MOD_CARBONCHEM
 ! Import modules from the SOLVESAPHE package of Munhoven (2013)
 !
@@ -17,6 +18,7 @@
 !    along with SolveSAPHE.  If not, see <http://www.gnu.org/licenses/>.
 !
        USE MOD_PRECISION
+       USE MOD_COMMON, ONLY : one, permil
        USE MOD_CHEMCONST
        USE MOD_PHSOLVERS
        USE MOD_CHEMSPECIATION
@@ -39,9 +41,6 @@
 
 ! Pressure at one atmosphere (bar)
        REAL(KIND=wp), PARAMETER :: p_bar_oneatmosphere = 1.01325_wp ! Handbook (2007)
-
-! convert from mol/kg to mol/m3
-       REAL(KIND=wp), PARAMETER :: permil = 1.0_wp/1024.5_wp
        
 ! --------------------------------------------------------------
 ! variable for usage by users of the module
@@ -52,21 +51,14 @@
        CONTAINS
 
 !=======================================================================
-       SUBROUTINE SETUP_FLUXCOEFFS(t, s)
+       SUBROUTINE SETUP_FLUXCOEFFS(t_k, s)
 ! ------------------
 ! Argument variables
 ! ------------------
 !     t_k    : temperature in Kelvin
 !     s      : salinity
-       REAL(KIND=wp), INTENT(IN) :: t
+       REAL(KIND=wp), INTENT(IN) :: t_k
        REAL(KIND=wp), INTENT(IN) :: s
-
-! ---------------
-! Local variables
-! ---------------
-       REAL(KIND=wp) :: t_k
-
-       t_k=t_k_zerodegc+t
 
        apiff_atm =  AK_FFATM_WEIS80 (t_k, s)
        apiff_oce =  AK_FFOCE_WEIS74 (t_k, s)
@@ -100,7 +92,7 @@
        REAL(KIND=wp) :: t_k_o_100
        REAL(KIND=wp) :: t_k_o_100_2
 
-       t_k_o_100   = t_k/100._wp
+       t_k_o_100   = t_k/hundred
        t_k_o_100_2 = t_k_o_100*t_k_o_100
 
        AK_FFATM_WEIS80                                                 &
@@ -145,10 +137,10 @@
        B1 = -1636.75_wp + 12.0408_wp*t_k - 0.0327957_wp*t_k*t_k
        B  = B1 + 3.16528_wp*t_k*t_k*t_k*1.e-5_wp
  
-!  "x2" term often neglected (assumed=1) in applications of Weiss's (1974) eq.9
+!  "x2" term often neglected (assumed=1) in applications of Weiss (1974) eq.9
 !   x2 = 1 - x1 = 1 - xCO2 (it is very close to 1, but not quite)
        AK_FFOCE_WEIS74                                                 &
-            = exp( (B+2.0_wp*delta) * p_bar_oneatmosphere /            &
+            = exp( (B+two*delta) * p_bar_oneatmosphere /               &
                          (gasconst_bar_cm3_o_mol_k*t_k))
 
        RETURN
@@ -180,7 +172,7 @@
 !!     zt_k_o_100   : zt_k/100
 !       REAL(KIND=wp) :: zt_k_o_100
 !
-!       zt_k_o_100 = t_k/100._wp
+!       zt_k_o_100 = t_k/hundred
 !
 !       AK_CARB_0_WEIS74                                                &
 !          = EXP( -60.2409_wp + 93.4517_wp/zt_k_o_100                   &
@@ -213,13 +205,13 @@
       REAL(KIND=wp) hini, z_val, hnew
       REAL(KIND=wp) bor, nh4, h2s, so4, flu
 
-      nh4 =  0.E-3_wp
-      h2s =  0.E-3_wp
+      nh4 =  zero
+      h2s =  zero
       bor =  A_BTOT_SALIN  (salt)
       so4 =  A_SO4TOT_SALIN(salt)
       flu =  A_FTOT_SALIN  (salt)
 
-      hini = 10._wp**(-1.0_wp * ph)
+      hini = ten**(-one * ph)
 
       hnew = SOLVE_AT_GENERAL(alk, dic, bor, po4, sit, nh4, h2s,       &   
                             so4, flu, p_hini=hini, p_val=z_val)
@@ -231,7 +223,7 @@
       CALL SPECIATION_DIC(dic,hnew,co2aq,hco3,co3)
 
 ! get K0 and fugacity            
-      CALL SETUP_FLUXCOEFFS(theta, salt)
+      CALL SETUP_FLUXCOEFFS(t_k_zerodegc + theta, salt)
 
 !      z_fco2 = z_co2aq/z_k0
 !     co2aq will be in mol/m3, convert to mol/kg to use with K0 and ff
@@ -284,7 +276,7 @@
               -    0.092307_wp * theta * theta * theta                 &
               +    7.555e-4_wp * theta * theta * theta * theta
 
-      Kwexch =  (0.337_wp * wind**2._wp/3.6e5_wp) * fopen              &
+      Kwexch =  (0.337_wp * wind**two/3.6e5_wp) * fopen              &
                 / sqrt(scadic/660._wp)    
                
       do i = 1,nbox

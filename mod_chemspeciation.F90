@@ -1,3 +1,4 @@
+! -*- f90 -*-
 !
 !    Copyright 2013 Guy Munhoven
 !
@@ -39,7 +40,7 @@ SUBROUTINE SPECIATION_DIC(p_dictot, p_h, p_co2, p_hco3, p_co3)
 
 
 !------------------------------!
-! Chemical constants' products !
+! Chemical constants products  !
 !------------------------------!
 ! - api1_dic = K_1
 ! - api2_dic = K_1*K_2
@@ -114,7 +115,7 @@ SUBROUTINE SPECIATION_BOR(p_bortot, p_h, p_boh3, p_boh4)
 
 
 !------------------------------!
-! Chemical constants' products !
+! Chemical constant products   !
 !------------------------------!
 ! - api1_bor = K_1
 
@@ -178,7 +179,7 @@ SUBROUTINE SPECIATION_PO4(p_po4tot, p_h, p_h3po4, p_h2po4, p_hpo4, p_po4)
 
 
 !------------------------------!
-! Chemical constants' products !
+! Chemical constant products   !
 !------------------------------!
 ! - api1_po4 = K_1
 ! - api2_po4 = K_1*K_2
@@ -269,7 +270,7 @@ SUBROUTINE SPECIATION_SIL(p_siltot, p_h, p_h4sio4, p_h3sio4)
 
 
 !------------------------------!
-! Chemical constants' products !
+! Chemical constant products   !
 !------------------------------!
 ! - api1_sil = K_1
 
@@ -333,7 +334,7 @@ SUBROUTINE SPECIATION_H2S(p_h2stot, p_h, p_h2s, p_hs)
 
 
 !------------------------------!
-! Chemical constants' products !
+! Chemical constant products   !
 !------------------------------!
 ! - api1_h2s = K_1
 
@@ -397,7 +398,7 @@ SUBROUTINE SPECIATION_NH4(p_nh4tot, p_h, p_nh4, p_nh3)
 
 
 !------------------------------!
-! Chemical constants' products !
+! Chemical constant products   !
 !------------------------------!
 ! - api1_nh4 = K_1
 
@@ -463,7 +464,7 @@ SUBROUTINE SPECIATION_SO4(p_so4tot, p_h, p_hso4, p_so4)
 
 
 !------------------------------!
-! Chemical constants' products !
+! Chemical constant products   !
 !------------------------------!
 ! - api1_so4 = K_1
 
@@ -527,7 +528,7 @@ SUBROUTINE SPECIATION_FLU(p_flutot, p_h, p_hf, p_f)
 
 
 !------------------------------!
-! Chemical constants' products !
+! Chemical constant products   !
 !------------------------------!
 ! - api1_flu = K_1
 

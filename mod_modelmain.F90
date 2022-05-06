@@ -1,11 +1,12 @@
+! -*- f90 -*-
        MODULE MOD_MODELMAIN
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION      
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION 
        USE MOD_PRECISION
        USE MOD_BOXES
        USE MOD_DIMENSIONS
        use MOD_COMMON
        USE MOD_CARBONCHEM
-       IMPLICIT NONE
+IMPLICIT NONE
 ! --------------------------------------------------------
 ! List of (PRIVATE) routines/functions
 ! --------------------------------------------------------
@@ -22,6 +23,11 @@
             maxyears,                                                  &
             outputyears,                                               &
             outstepmax,                                                &
+            dx,                                                        &
+            dy,                                                        &
+            dz,                                                        &
+            K,                                                         &
+            R,                                                         &
             psi,                                                       &
             alpha_yr,                                                  &
             gamma_Fe,                                                  &
@@ -51,8 +57,9 @@
             expout,                                                    &
             nlout,                                                     &
             psout,                                                     &
-            pco2out,                                                   &
-            atpco2out)
+            ocpco2out,                                                 &
+            atpco2out                                                  &        
+            )
 
 !-----------------------------------------------------------------------         
 ! input arguments   
@@ -67,7 +74,8 @@
             lt_lifetime,                                               &
             atpco2in
 
-       REAL(KIND=wp), dimension (nbox), intent(in) ::                  &
+       REAL(KIND=wp), intent(in), dimension (nbox) ::                  &
+            dx, dy, dz,                                                &
             thin,                                                      &
             sain,                                                      &
             cin,                                                       &
@@ -80,8 +88,11 @@
             dlambdadz,                                                 &
             wind,                                                      &
             fopen
-            
-       REAL(KIND=wp), dimension (outstepmax,nbox), intent(out) ::      &
+
+       REAL(KIND=wp), intent(in), dimension (nbox, nbox) ::            &
+            K, R
+     
+       REAL(KIND=wp), intent(out), dimension (outstepmax,nbox) ::      &
             thout,                                                     &
             sout,                                                      &
             cout,                                                      &
@@ -91,32 +102,34 @@
             fout,                                                      &
             lout,                                                      &
             expout,                                                    &
-            pco2out
+            ocpco2out
             
-       REAL(KIND=wp), dimension (outstepmax), intent(out) ::           &
+       REAL(KIND=wp), intent(out), dimension (outstepmax) ::           &
             tout,                                                      &
             psout,                                                     &
             atpco2out
 
-       INTEGER , dimension (outstepmax), intent(out) ::                &
+       INTEGER, intent(out), dimension (outstepmax) ::                 &
             nlout                                                     
 
 ! local variables
 !       include "comdeck.h"
        INTEGER       :: nstep, outstep
        REAL(KIND=wp) :: time
-       CHARACTER*64  :: fmt, varfmt, frep, filename
+       CHARACTER*64  :: fmt, inifmt, varfmt, frep, filename
 !-----------------------------------------------------------------------         
-
+        
+       CALL common_assignments()
+       
 ! set some parameters
-       nstepmax   = int(maxyears*d_per_yr)        
+       nstepmax   = int(maxyears*(speryr/dt))
 ! initialize outstep
        outstep = 1
 ! initial time
        time = 0._wp
 
        CALL establish_dimensions(dx,dy,dz,lat,area,vol,invol,          &
-                                          depth,pressure,K,R)
+                                          depth,pressure)
 
        theta = thin
        salt  = sain
@@ -129,28 +142,28 @@
        lt  = lin * nmolkg2molm3
        sit = pin * umolkg2molm3 * rSIP
        
-       ph  = 8._wp
+       ph  = eight
 ! initialize tracer rates of change
 ! temp, salt, and si are passive for now, just for co2 solubility
-       dthetadt = 0._wp 
-       dsaltdt  = 0._wp 
-       ddicdt   = 0._wp 
-       dalkdt   = 0._wp 
-       dpo4dt   = 0._wp 
-       dno3dt   = 0._wp 
-       dfetdt   = 0._wp 
-       dltdt    = 0._wp 
-       dsitdt   = 0._wp 
+       dthetadt = zero 
+       dsaltdt  = zero 
+       ddicdt   = zero 
+       dalkdt   = zero 
+       dpo4dt   = zero 
+       dno3dt   = zero 
+       dfetdt   = zero 
+       dltdt    = zero 
+       dsitdt   = zero 
 
 !! Iron cycle parameters ......... 
 ! Iron external source
 !  convert to mol Fe m-2 s-1
-       fe_depo = fe_input / (weight_fe*s_per_yr)
+       fe_depo = fe_input / (weight_fe*speryr)
 
 ! ligand parameters 
 ! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
-       if (lt_lifetime.LE.0._wp) then
-          lambda = 0._wp
+       if (lt_lifetime.LE.zero) then
+          lambda = zero
        else
           lambda = dlambdadz/lt_lifetime
        endif
@@ -158,15 +171,15 @@
 ! Export production parameters (Parekh et al, 2005):
 ! max export prodution rate: (again, phosphorus units, mol P m-3 s-1)
 !      alpha = 0.5d-6 * conv / (30.0*86400.0) ! Recover with alpha_yr=6e-6
-       alpha = alpha_yr * conv / (s_per_yr) 
+       alpha = alpha_yr * conv / (speryr) 
        
 ! Initial export production and nutrient limitation code
-       light  = 0._wp
-       ilimit = 0._wp
-       plimit = 0._wp
-       nlimit = 0._wp
-       flimit = 0._wp
-       export = 0._wp
+       light  = zero
+       ilimit = zero
+       plimit = zero
+       nlimit = zero
+       flimit = zero
+       export = zero
        lim    = 0
 
 ! evaluate pstar, consistent with Harvardton Bears SO sensitivity
@@ -176,10 +189,11 @@
 ! Mass dry atmosphere = (5.1352+/-0.0003)d18 kg (Trenberth & Smith,
 ! Journal of Climate 2005)
 ! and Mean molecular mass air = 28.97 g/mol (NASA earth fact sheet)
-       atmos_moles = (5.1352e18_wp * 1.e3_wp) / 28.97_wp
-! but need to scale by the ratio of Earth surface area to model surface area
+!  but need to scale by the ratio of Earth surface area to model surface area
 ! Earths area = 5.10082000d8 km2 * 1.e6 m2/km2 (NOAA earth fact sheet)
 !       atmos_moles = atmos_moles * area(3)/(5.10082e8 * 1.e6)
+       atmos_moles = ((5.1352e18_wp * 1000._wp) / 28.97_wp)            &
+                        * (area(3)/(5.10082e8_wp * 1.e6_wp))
        pco2atmos    = atpco2in  * uatm2atm
        atmos_carbon = pco2atmos * atmos_moles
        sitM         = (po4 * rSIP) / umolkg2molm3 
@@ -199,7 +213,10 @@
                       pco2ocean,                                       &
                         fluxCO2 )
 
-! write initial values to the output....
+! write initial values to the average accumulators....
+       timeM  = time
+       thetaM = theta
+       saltM  = salt
 ! convert to nmol kg-1 for iron, umol kg-1 for PO4
        dicM   = dic / umolkg2molm3  
        alkM   = alk / umolkg2molm3
@@ -207,88 +224,80 @@
        no3M   = no3 / umolkg2molm3
        fetM   = fet / nmolkg2molm3
        ltM    = lt  / nmolkg2molm3
-!       export = export   * vol
+       exportM= export * vol * molps2gtcyr
+       pstarM = pstar
        pco2M  = pco2ocean / uatm2atm
        pco2A  = pco2atmos / uatm2atm
        
-#ifdef WRITEOUTFILE    
+#if defined(WRITEOUTFILE)    
 ! open an output file and write initial values to file
           write (filename, '(a,I0.6,a)') 'microCOSM',id,'.dat'
           open(14,file=filename,status='unknown')
-           
+
 ! write column header output 
-           write(14,*)'t(yr) Limits',                                  &
-                      'THETA(1) THETA(2) THETA(3) ',                   &
-                      'SALT(1)  SALT(2)  SALT(3)  ',                   &
-                      'DIC(1)   DIC(2)   DIC(3)   ',                   &
-                      'ALK(1)   ALK(2)   ALK(3)   ',                   &
-                      'PO4(1)   PO4(2)   PO4(3)   ',                   &
-                      'NO3(1)   NO3(2)   NO3(3)   ',                   &
-                      'FeT(1)   FeT(2)   FeT(3)   ',                   &
-                      'LT(1)    LT(2)    LT(3)    ',                   &
-                      'Exp(1)   Exp(2)   EXP(3)   ',                   &
-                      'P*  OCPCO2(1) OCPCO2(2)  OCPCO2(3) ATPCO2'
-     
-! 300       format(1x, i7.1, 1x,                                        &
-!                   f8.5,  1x, f8.5,  1x, f8.5,  1x,                     &
-!                   f8.5,  1x, f8.5,  1x, f8.5,  1x,                     &
-!                   f10.5, 1x, f10.5, 1x, f10.5, 1x,                     &
-!                   f10.5, 1x, f10.5, 1x, f10.5, 1x,                     &
-!                   f8.5,  1x, f8.5,  1x, f8.5,  1x,                     &
-!                   f8.5,  1x, f8.5,  1x, f8.5,  1x,                     &
-!                   f8.5,  1x, f8.5,  1x, f8.5,  1x,                     &
-!                   f8.5,  1x, f8.5,  1x, f8.5,  1x,                     &
-!                   f10.3, 1x, f10.3, 1x, i3.0,  1x,                     &
-!                   f8.5,  1x, f10.5, 1x, f10.5, 1x, f10.5)
+           write(14,*)'     t(yr)     Limits  ',                       &
+               repeat('  THETA    ',nbox),                             &
+               repeat(' SALT      ',nbox),                             &
+               repeat('DIC        ',nbox),                             &
+               repeat('ALK        ',nbox),                             &
+               repeat('   PO4     ',nbox),                             &
+               repeat('  NO3      ',nbox),                             &
+               repeat('   FET     ',nbox),                             &
+               repeat('   LIG     ',nbox),                             &
+               repeat('   EXPORT  ',nbox),                             &
+               '   P*      ',                                          &
+               repeat(' OCPCO2    ',nbox),                             &
+               ' ATPCO2    '
 
 ! Construct fortran format string
 ! Output the time and nutrient limitation code
-           fmt='1x, i7.1, 1x, i3.0,'
+           inifmt='1x, i10.1, 1x, i10.0,'
 ! Each variable then is a space and a 10 position float with 5 decimal places
            varfmt='1x, f10.5'
 ! This is the number of repeats (10 variables of nbox dimensions plus pstar and atmpco2)
            write(frep ,'(I4)') 10*nbox+2
 ! Combine everything together
-           fmt='('//trim(fmt)//trim(frep)//'('//trim(varfmt)//'))'
+!          fmt='('//trim(fmt)//trim(frep)//'('//trim(varfmt)//'))'
+           write(fmt,'(6A)') '(',trim(inifmt),trim(frep),'(',trim(varfmt),'))'
+
 
 ! Write initial conditions to file
-           write(14,fmt) int(time),                                    & 
+           write(14,fmt) int(timeM),                                   & 
                                lim,                                    & 
-                             theta,                                    & 
-                              salt,                                    &
+                            thetaM,                                    & 
+                             saltM,                                    &
                               dicM,                                    & 
                               alkM,                                    &
                               po4M,                                    &
                               no3M,                                    &
                               fetM,                                    &
                                ltM,                                    &
-            export*vol*molps2gtcyr,                                    &
-                             pstar,                                    &
+                           exportM,                                    &
+                            pstarM,                                    &
                              pco2M,                                    &
-                             pco2A          
+                             pco2A
 #endif
 
 ! output to array
-       thout     (outstep,1:nbox) = theta
-       sout      (outstep,1:nbox) = salt
+       thout     (outstep,1:nbox) = thetaM
+       sout      (outstep,1:nbox) = saltM
        cout      (outstep,1:nbox) = dicM
        aout      (outstep,1:nbox) = alkM
        pout      (outstep,1:nbox) = po4M
        nout      (outstep,1:nbox) = no3M
        fout      (outstep,1:nbox) = fetM
        lout      (outstep,1:nbox) = ltM
-       expout    (outstep,1:nbox) = export * vol * molps2gtcyr
-       pco2out   (outstep,1:nbox) = pco2M
-       tout      (outstep) = time
+       expout    (outstep,1:nbox) = exportM
+       ocpco2out (outstep,1:nbox) = pco2M
+       tout      (outstep) = timeM
        nlout     (outstep) = lim
-       psout     (outstep) = pstar
+       psout     (outstep) = pstarM
        atpco2out (outstep) = pco2A
-
 ! Increment outstep
        outstep=outstep+1
          
 ! timestepping .........................................
-       do 200 nstep = 1,INT(nstepmax) 
+       do 200 nstep = 1,nstepmax
 ! evaluate rates of change due to transport
 !         dthetadt = transport(nbox, theta, K, psi, invol) 
 !         dsaltdt  = transport(nbox, salt,  K, psi, invol) 
@@ -299,11 +308,11 @@
          dfetdt = TRANSPORT(fet, K, psi, invol) 
          dltdt  = TRANSPORT(lt,  K, psi, invol) 
 
-         time=nstep*dt / (s_per_yr) 
+         time=nstep*dt / (speryr) 
 
 ! evaluate biogeochemical rates of change
 ! Surface boxes...
-         netco2flux=0._wp
+         netco2flux = zero
                   
 ! Calculate surface air-sea gas exchange of CO2      
          call carbon_fluxes(theta,                                     &
@@ -326,34 +335,24 @@
          ddicdt     = ddicdt     + fluxCO2 / dz
          
 ! biological terms
-         itim   = time * s_per_yr
-         light  = INSOL(itim, s_per_yr, lat)
+         light  = INSOL(time * speryr, lat)
          
          ilimit = light / (light + klight)
          plimit = po4   / (po4   +  kpo4 ) 
          nlimit = no3   / (no3   +  kno3 ) 
          flimit = fet   / (fet   +   kfe ) 
 
-! minval accepts an array of values and then finds the minimum along dim arguement
-!   need to reshape the concatenated nutrient arrays here to stack them by box
 ! -ve export is uptake by phytoplankton, +ve export is net remineralization
-       bioP = alpha                                                    &
-                  * ilimit                                             &
-                  * minval(                                            &
-                      RESHAPE((/plimit,nlimit,flimit/),(/nbox, 3/))    &
-                         ,2)
+       bioP = CALC_PRODUCTION(nlimit, plimit, flimit, ilimit, alpha)
 
-       lim = NUTRIENT_LIMIT_CODE(plimit, nlimit, flimit, ilimit)
+       lim  = NUTRIENT_LIMIT_CODE(plimit, nlimit, flimit, ilimit)
+
 ! scale rate of nutrient export with rate of phosphorus export
 ! R matrix determines export flux and remineralization locations
 ! Spread broadcasts export and volume arrays to matrices
 ! Each is volume weighted (technically for a single box, this is not necessary,
 !    but it works for accumulation of several boxes too.)
-        export = SUM(R                                                 &
-                  * SPREAD(bioP,1,nbox)                                &
-                  * SPREAD(vol ,1,nbox)                                &
-                       ,2)                                             &
-                  * invol
+        export = CALC_EXPORT(R, bioP, vol, invol)
 
 ! carbonate flux depends on rain ratio
        carb = export * rCP * rCACO3
@@ -364,11 +363,11 @@
   
 ! For DIC carbonate is the export of 1 mol C (_C_O32-)   
 ! -ve bioP is uptake by phytoplankton, +ve bioP is net remineralization
-       ddicdt = ddicdt + 1._wp * carb + export * rCP 
+       ddicdt = ddicdt + one * carb + export * rCP 
 
 ! Whereas for ALK carbonate is the export of 2 mol ions (CO3_2-_) 
 !     there is also change in ions due to consumption of nitrate
-       dalkdt = dalkdt + 2._wp * carb - export * rNP
+       dalkdt = dalkdt + two * carb - export * rNP
 
 ! Dynamic ligand production is based on exudation in the surface layers depending on 
 !   production and release during remineralization in the ocean interior
@@ -386,9 +385,9 @@
 
        dfetdt = dfetdt - Kscav*feprime 
 
-! if FeT > LT, then all excess iron is Fe' and precipitates out quickly
+! if FeT > LT, then all excess iron is Fe-prime and precipitates out quickly
 ! Liu and Millero indicate very small "soluble" free iron
-       WHERE (fet > lt ) dfetdt = dfetdt - (1._wp/relaxfe)*(fet - lt) 
+       WHERE (fet > lt ) dfetdt = dfetdt - (one/relaxfe)*(fet - lt) 
 
 #ifndef FIXATMPCO2
 ! Update atmospheric CO2 (but only if you want to)
@@ -401,51 +400,75 @@
 #endif
 
 ! Euler forward step concentrations
-        theta = theta + dthetadt * dt 
-        salt  = salt  + dsaltdt  * dt 
-        dic   = dic   + ddicdt   * dt 
-        alk   = alk   + dalkdt   * dt 
-        po4   = po4   + dpo4dt   * dt
-        no3   = no3   + dno3dt   * dt         
-        fet   = fet   + dfetdt   * dt 
-        lt    = lt    + dltdt    * dt 
+       theta = theta + dthetadt * dt 
+       salt  = salt  + dsaltdt  * dt 
+       dic   = dic   + ddicdt   * dt 
+       alk   = alk   + dalkdt   * dt 
+       po4   = po4   + dpo4dt   * dt
+       no3   = no3   + dno3dt   * dt         
+       fet   = fet   + dfetdt   * dt 
+       lt    = lt    + dltdt    * dt 
 
 ! evaluate pstar
        pstar  = calc_pstar(po4) 
-       time   = nstep*dt / s_per_yr 
+       time   = nstep*dt / speryr 
+
+! Increment the average accumulators
+       timeM  = (timeM  + time              )
+       thetaM = (thetaM + theta             )
+       saltM  = (saltM  + salt              )
+
+       dicM   = (dicM + dic / umolkg2molm3  )
+       alkM   = (alkM + alk / umolkg2molm3  )
+       po4M   = (po4M + po4 / umolkg2molm3  )
+       no3M   = (no3M + no3 / umolkg2molm3  )
+       fetM   = (fetM + fet / nmolkg2molm3  )
+       ltM    = (ltM  + lt  / nmolkg2molm3  )
+       pstarM = (pstarM + pstar             )
+       pco2M  = (pco2M+ pco2ocean / uatm2atm)
+       pco2A  = (pco2A+ pco2atmos / uatm2atm)
+         
+       exportM= (exportM+export*vol*molps2gtcyr)
+
 
 ! if an output time, write some output to screen and file
        if (mod(time,outputyears) .eq. 0)then
+! For output, work out what the average is
+         timeM  = timeM  /(outputyears*speryr/dt)
+         thetaM = thetaM /(outputyears*speryr/dt)
+         saltM  = saltM  /(outputyears*speryr/dt)
 
-! For output ! convert to mol kg-1
-         dicM   = dic / umolkg2molm3  
-         alkM   = alk / umolkg2molm3
-         po4M   = po4 / umolkg2molm3
-         no3M   = no3 / umolkg2molm3
-         fetM   = fet / nmolkg2molm3
-         ltM    = lt  / nmolkg2molm3
-         pco2M= pco2ocean / uatm2atm
-         pco2A= pco2atmos / uatm2atm
+         dicM   = dicM   /(outputyears*speryr/dt)
+         alkM   = alkM   /(outputyears*speryr/dt)
+         po4M   = po4M   /(outputyears*speryr/dt)
+         no3M   = no3M   /(outputyears*speryr/dt)
+         fetM   = fetM   /(outputyears*speryr/dt)
+         ltM    = ltM    /(outputyears*speryr/dt)
+         pstarM = pstarM /(outputyears*speryr/dt)
+         pco2M  = pco2M  /(outputyears*speryr/dt)
+         pco2A  = pco2A  /(outputyears*speryr/dt)
+         
+         exportM= exportM/(outputyears*speryr/dt)
 
-#ifdef WRITEOUTFILE    
-! write to file
-           write(14,fmt) int(time),                                    & 
+#if defined(WRITEOUTFILE)           
+! Write model state to file                             
+           write(14,fmt) int(timeM),                                   & 
                                lim,                                    & 
-                             theta,                                    & 
-                              salt,                                    &
+                            thetaM,                                    & 
+                             saltM,                                    &
                               dicM,                                    & 
                               alkM,                                    &
                               po4M,                                    &
                               no3M,                                    &
                               fetM,                                    &
                                ltM,                                    &
-           -export*vol*molps2gtcyr,                                    &
-                             pstar,                                    &
+                          -exportM,                                    &
+                            pstarM,                                    &
                              pco2M,                                    &
-                             pco2A          
+                             pco2A
 #endif
        
-! output to array         
+! output to array
        thout     (outstep,1:nbox) = theta
        sout      (outstep,1:nbox) = salt
        cout      (outstep,1:nbox) = dicM
@@ -454,12 +477,29 @@
        nout      (outstep,1:nbox) = no3M
        fout      (outstep,1:nbox) = fetM
        lout      (outstep,1:nbox) = ltM
-       expout    (outstep,1:nbox) =-export * vol * molps2gtcyr
-       pco2out   (outstep,1:nbox) = pco2M
-       tout      (outstep) = time
+       expout    (outstep,1:nbox) =-exportM
+       ocpco2out (outstep,1:nbox) = pco2M
+       tout      (outstep) = timeM
        nlout     (outstep) = lim
-       psout     (outstep) = pstar
+       psout     (outstep) = pstarM
        atpco2out (outstep) = pco2A
+
+! Reset the average accumulators
+       timeM  = 0._wp
+       thetaM = 0._wp
+       saltM  = 0._wp
+
+       dicM   = 0._wp
+       alkM   = 0._wp
+       po4M   = 0._wp
+       no3M   = 0._wp
+       fetM   = 0._wp
+       ltM    = 0._wp
+       pstarM = 0._wp
+       pco2M  = 0._wp
+       pco2A  = 0._wp
+         
+       exportM= 0._wp
 
 ! Increment outstep
          outstep=outstep+1
@@ -467,7 +507,7 @@
 ! end timestepping loop
  200   enddo
 
-#ifdef WRITEOUTFILE    
+#if defined(WRITEOUTFILE)    
 ! close the output file
        close(14)
 #endif
@@ -476,16 +516,15 @@
 !=======================================================================
 
 !=======================================================================
-       FUNCTION INSOL(boxtime,sinayr,boxlat)
 ! find light as function of date and latitude
 ! based on paltridge and parson
+       FUNCTION INSOL(boxtime,boxlat)
        USE MOD_BOXES
 
        IMPLICIT NONE
        REAL(KIND=wp), DIMENSION(nbox) :: INSOL
-       REAL(KIND=wp), intent(in) :: boxtime
-       REAL(KIND=wp), intent(in) :: sinayr
        REAL(KIND=wp), intent(in), DIMENSION(nbox) :: boxlat
+       REAL(KIND=wp), intent(in) :: boxtime
 ! Local variables       
        REAL(KIND=wp), DIMENSION(nbox) :: dayfrac
        REAL(KIND=wp), DIMENSION(nbox) :: yday
@@ -497,33 +536,37 @@
        REAL(KIND=wp), DIMENSION(nbox) :: sun
        REAL(KIND=wp), DIMENSION(nbox) :: cosz
        REAL(KIND=wp), PARAMETER :: pi = 3.14159265358979323844_wp
+       REAL(KIND=wp), PARAMETER :: deg2rad = pi/180._wp
 !fraction of sunlight that is photosynthetically active
        REAL(KIND=wp), PARAMETER :: parfrac = 0.4_wp
 !solar constant
        REAL(KIND=wp), PARAMETER :: solar = 1360._wp 
 !planetary albedo
        REAL(KIND=wp), PARAMETER :: albedo = 0.60_wp   
-             
+       REAL(KIND=wp), PARAMETER :: minsun =-0.999_wp   
+       REAL(KIND=wp), PARAMETER :: mincosz= 0.005_wp   
+       REAL(KIND=wp), PARAMETER :: mininso= 0.00001_wp   
+
 ! find day (****NOTE for year starting in winter*****)
-       dayfrac=mod(boxtime,sinayr)/(sinayr) !fraction of year
-       yday = 2._wp*pi*dayfrac                 !convert to radians
+       dayfrac=mod(boxtime  ,speryr)/(speryr) !fraction of year
+       yday = two*pi*dayfrac                 !convert to radians
        delta = (0.006918_wp                                           &
            -(0.399912_wp*cos(yday))                                   &
            +(0.070257_wp*sin(yday))                                   &
-           -(0.006758_wp*cos(2._wp*yday))                             &
-           +(0.000907_wp*sin(2._wp*yday))                             &
-           -(0.002697_wp*cos(3._wp*yday))                             &
-           +(0.001480_wp*sin(3._wp*yday)))                                   
+           -(0.006758_wp*cos(two*yday))                               &
+           +(0.000907_wp*sin(two*yday))                               &
+           -(0.002697_wp*cos(three*yday))                             &
+           +(0.001480_wp*sin(three*yday)))                                   
 
 ! latitude in radians
-       latrad = boxlat*(pi/180._wp)
+       latrad = boxlat*deg2rad
        
        sun    = -sin(delta)/cos(delta) * sin(latrad)/cos(latrad)
 
-       where ( sun .LT. -0.999_wp )
-          sun = -0.999_wp
-       elsewhere ( sun .GE. 0.999_wp ) 
-          sun =  0.999_wp
+       where ( sun .LT. minsun )
+          sun = minsun
+       elsewhere ( sun .GE. abs(minsun) ) 
+          sun =  abs(minsun)
        end where
 
        dayhrs = abs(acos(sun))
@@ -531,21 +574,73 @@
        cosz = ( sin(delta)*sin(latrad)+                                &
               ( cos(delta)*cos(latrad)*sin(dayhrs)/dayhrs) )
        
-       where ( cosz .LT. 5.e-3_wp )
-           cosz = 5.e-3_wp
+       where ( cosz .LT. mincosz )
+           cosz = mincosz
        end where
        
        frac = dayhrs/pi                       !fraction of daylight in day
 
 ! daily average photosynthetically active solar radiation just below surface
-       INSOL = solar*(1._wp-albedo)*cosz*frac*parfrac
+       INSOL = solar*(one-albedo)*cosz*frac*parfrac
 
-       where ( INSOL .LT. 1.e-5_wp )
-           INSOL = 1.e-5_wp
+       where ( INSOL .LT. mininso )
+           INSOL = mininso
        end where
        
        RETURN
        END FUNCTION INSOL
+!=======================================================================
+
+!=======================================================================
+! Calculate surface primary production given macro/micronutrient/light limitation
+       FUNCTION CALC_PRODUCTION(nlimit, plimit, flimit, ilimit, alpha)
+       USE MOD_BOXES
+
+       IMPLICIT NONE
+       REAL(KIND=wp), DIMENSION(nbox):: CALC_PRODUCTION
+
+       REAL(KIND=wp), intent(in) , DIMENSION(nbox):: nlimit
+       REAL(KIND=wp), intent(in) , DIMENSION(nbox):: plimit
+       REAL(KIND=wp), intent(in) , DIMENSION(nbox):: flimit
+       REAL(KIND=wp), intent(in) , DIMENSION(nbox):: ilimit 
+       REAL(KIND=wp), intent(in)                  :: alpha
+
+! Non-linear model can use array operations
+! minval accepts an array of values and then finds the minimum along dim arguement
+!   need to reshape the concatenated nutrient arrays here to stack them by box
+! -ve export is uptake by phytoplankton, +ve export is net remineralization
+       CALC_PRODUCTION = alpha * ilimit * minval(                      &
+                      RESHAPE([ plimit, nlimit, flimit ],[ nbox, 3 ])  &
+                                                 ,2)
+       RETURN
+       END FUNCTION CALC_PRODUCTION
+!=======================================================================
+
+!=======================================================================
+! calculate export flux of primary production
+       FUNCTION CALC_EXPORT(R, bioP, vol, invol)
+       USE MOD_BOXES
+
+       IMPLICIT NONE
+       REAL(KIND=wp), DIMENSION(nbox):: CALC_EXPORT
+
+       REAL(KIND=wp), intent(in) , DIMENSION(nbox,nbox) :: R
+       REAL(KIND=wp), intent(in) , DIMENSION(nbox)      :: bioP
+       REAL(KIND=wp), intent(in) , DIMENSION(nbox)      :: vol 
+       REAL(KIND=wp), intent(in) , DIMENSION(nbox)      :: invol 
+
+! scale rate of nutrient export with rate of phosphorus export
+! R matrix determines export flux and remineralization locations
+! Spread broadcasts export and volume arrays to matrices
+! Each is volume weighted (technically for a single box, this is not necessary,
+!    but it works for accumulation of several boxes too.)
+        CALC_EXPORT = SUM(R                                            &
+                            * SPREAD(bioP,1,nbox)                      &
+                            * SPREAD(vol ,1,nbox)                      &
+                          ,2)                                          &
+                      * invol
+       RETURN
+       END FUNCTION CALC_EXPORT
 !=======================================================================
 
 !=======================================================================
@@ -565,14 +660,14 @@
        REAL(KIND=wp), DIMENSION(nbox):: invbeta
        REAL(KIND=wp), DIMENSION(nbox):: a,b,c,discriminant,x1,x2
 !
-       invbeta = 1._wp/lig_beta
-       a  = 1._wp 
+       invbeta = one/lig_beta
+       a  = one 
        b  = (ligand + invbeta - iron) 
-       c = -1._wp * iron * invbeta 
+       c = -one * iron * invbeta 
 ! standard quadratic solution for roots
-       discriminant = ( b*b - 4._wp*a*c )**0.5
-       x1 = (-b + discriminant) / (2._wp*a) 
-       x2 = (-b - discriminant) / (2._wp*a) 
+       discriminant = ( b*b - four*a*c )**0.5
+       x1 = (-b + discriminant) / (two*a) 
+       x2 = (-b - discriminant) / (two*a) 
 ! which root?
        FE_EQUIL = x1 
 ! 
@@ -593,39 +688,30 @@
        REAL(KIND=wp), intent(in) , DIMENSION(nbox) :: nlimit
        REAL(KIND=wp), intent(in) , DIMENSION(nbox) :: flimit
        REAL(KIND=wp), intent(in) , DIMENSION(nbox) :: ilimit
-       
+       REAL(KIND=wp), DIMENSION(nbox, 4)           :: leibig
+
        INTEGER,                    DIMENSION(nbox) :: lim
+       
        INTEGER           :: i, limout
        CHARACTER(nbox*2) :: clim
        CHARACTER(2)      :: tmp
        
-       lim=4
+       lim=0
 ! Nutrient Limitation codes:
 !  0 = Initial condition
-!  1 = macronutrient
-!  2 = iron
-!  3 = light
-!  4 = colimited     
-       nutlimcode: where (plimit.LT.flimit.OR.nlimit.LT.flimit         &
-                             .AND.plimit.LT.ilimit)
-!         Phosphate limits production (code 1)       
-          lim=1
-       elsewhere (ilimit.LT.plimit.AND.ilimit.LT.nlimit                 &
-                                  .AND.ilimit.LT.flimit) 
-!         Light limits production (but also there will be nutrient limitation too)
-!           (code 3)
-          lim=3
-       elsewhere (flimit.LT.plimit.OR.flimit.LT.nlimit                 &
-                                 .AND.flimit.LT.ilimit)
-!         Iron limits production (code 2))
-          lim=2
-       end where nutlimcode
-       
+!  1 = phosphate
+!  2 = nitrate
+!  3 = iron
+!  4 = light
+       leibig = RESHAPE([ plimit,nlimit,flimit,ilimit ],[ nbox, 4 ])
+
+       lim=minloc(leibig,2)
+
 !      write out array integers and concatenate as a string       
        write(clim,'(I0)') lim(1)
        do i = 2,nbox
           write(tmp ,'(I0)') lim(i)
-          write(clim,*) trim(clim)//trim(tmp)
+          write(clim,'(2A)') trim(clim),trim(tmp)
        end do
 
 !      Read the string back in to an integer

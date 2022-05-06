@@ -1,3 +1,4 @@
+! -*- f90 -*-
 !
 !    Copyright 2013 Guy Munhoven
 !
@@ -22,8 +23,8 @@
 
 
 MODULE MOD_CHEMCONST
-
 USE MOD_PRECISION
+USE MOD_COMMON, ONLY: one, two, ten, hundred
 
 IMPLICIT NONE
 
@@ -62,7 +63,7 @@ REAL(KIND=wp), PARAMETER :: t_k_zerodegc = 273.15_wp ! Handbook (2007)
 
 
 ! --------------------------------------------------------------
-! Chemical constants' products: for usage by users of the module
+! Chemical constants products: for usage by users of the module
 ! --------------------------------------------------------------
 
 ! For each acid system A, 
@@ -111,7 +112,7 @@ REAL(KIND=wp), INTENT(IN) :: p_bar
 REAL(KIND=wp) :: zcvt_htot_o_hsws, zcvt_htot_o_hfree
 
 
-zcvt_htot_o_hsws  = 1._wp/ACVT_HSWS_O_HTOT(t_k, s, p_bar)
+zcvt_htot_o_hsws  = one/ACVT_HSWS_O_HTOT(t_k, s, p_bar)
 zcvt_htot_o_hfree = ACVT_HTOT_O_HFREE(t_k, s, p_bar)
 
 
@@ -239,7 +240,7 @@ REAL(KIND=wp) :: zt_k_o_100
 
 
 
-zt_k_o_100 = t_k/100._wp
+zt_k_o_100 = t_k/hundred
 
 AK_CARB_0_WEIS74                                                       &
           = EXP( -60.2409_wp + 93.4517_wp/zt_k_o_100                   &
@@ -323,7 +324,7 @@ zrt        = gasconst_bar_cm3_o_mol_k * t_k
 zdvi       =  -25.50_wp - 0.151_wp*zds + 0.1271_wp*zt_degc
 zdki       = ( -3.08_wp - 0.578_wp*zds + 0.0877_wp*zt_degc)*1.0E-03_wp
 
-zln_kc1_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kc1_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_C1 value
@@ -404,7 +405,7 @@ zrt        = gasconst_bar_cm3_o_mol_k * t_k
 zdvi       =  -15.82_wp + 0.321_wp*zds - 0.0219_wp*zt_degc
 zdki       =  ( 1.13_wp - 0.314_wp*zds - 0.1475_wp*zt_degc)*1.0E-03_wp
 
-zln_kc2_pp =  (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kc2_pp =  (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_C2 value
@@ -480,12 +481,12 @@ zrt        = gasconst_bar_cm3_o_mol_k * t_k
 zdvi       =  -25.50_wp - 0.151_wp*zds + 0.1271_wp*zt_degc
 zdki       = ( -3.08_wp - 0.578_wp*zds + 0.0877_wp*zt_degc)*1.0E-03_wp
 
-zln_kc1_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kc1_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_C1 value
 
-AK_CARB_1_LUEK00 = 10._wp**zlog10_kc1_p0 * EXP(zln_kc1_pp)
+AK_CARB_1_LUEK00 = ten**zlog10_kc1_p0 * EXP(zln_kc1_pp)
 
 RETURN
 
@@ -556,12 +557,12 @@ zrt        = gasconst_bar_cm3_o_mol_k * t_k
 zdvi       =  -15.82_wp + 0.321_wp*zds - 0.0219_wp*zt_degc
 zdki       =  ( 1.13_wp - 0.314_wp*zds - 0.1475_wp*zt_degc)*1.0E-03_wp
 
-zln_kc2_pp =  (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kc2_pp =  (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_C2 value
 
-AK_CARB_2_LUEK00  = 10._wp**zlog10_kc2_p0 *EXP(zln_kc2_pp)
+AK_CARB_2_LUEK00  = ten**zlog10_kc2_p0 *EXP(zln_kc2_pp)
 
 RETURN
 
@@ -641,7 +642,7 @@ zrt        = gasconst_bar_cm3_o_mol_k * t_k
 zdvi       =  -25.50_wp - 0.151_wp*zds + 0.1271_wp*zt_degc
 zdki       = ( -3.08_wp - 0.578_wp*zds + 0.0877_wp*zt_degc)*1.0E-03_wp
 
-zln_kc1_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kc1_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_C1 value
@@ -722,7 +723,7 @@ zrt        = gasconst_bar_cm3_o_mol_k * t_k
 zdvi       =  -15.82_wp + 0.321_wp*zds - 0.0219_wp*zt_degc
 zdki       =  ( 1.13_wp - 0.314_wp*zds - 0.1475_wp*zt_degc)*1.0E-03_wp
 
-zln_kc2_pp =  (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kc2_pp =  (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_C2 value
@@ -806,7 +807,7 @@ zrt       = gasconst_bar_cm3_o_mol_k * t_k
 zdvi      = -29.48_wp + 0.295_wp*zds + 0.1622_wp*zt_degc - 0.002608_wp*zt_degc*zt_degc
 zdki      = (-2.84_wp + 0.354_wp*zds)*1.0E-03_wp
 
-zln_kb_pp =  (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kb_pp =  (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_B value
@@ -879,7 +880,7 @@ zrt     = gasconst_bar_cm3_o_mol_k * t_k
 zdvi    =  -20.02_wp + 0.1119_wp*zt_degc - 0.1409E-02_wp*zt_degc*zt_degc
 zdki    = ( -5.13_wp + 0.0794_wp*zt_degc)*1.0E-03_wp
 
-zln_kw_pp =  (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kw_pp =  (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_w value
@@ -952,7 +953,7 @@ zrt       = gasconst_bar_cm3_o_mol_k * t_k
 zdvi      =  -14.51_wp + 0.1211_wp*zt_degc - 0.321E-03*zt_degc*zt_degc
 zdki      = ( -2.67_wp + 0.0427_wp*zt_degc)*1.0E-03_wp
 
-zln_kp1_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kp1_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final value of K_P1
@@ -1026,7 +1027,7 @@ zrt        = gasconst_bar_cm3_o_mol_k * t_k
 zdvi       =  -23.12_wp + 0.1758_wp*zt_degc -2.647E-03_wp*zt_degc*zt_degc
 zdki       = ( -5.15_wp +   0.09_wp*zt_degc)*1.0E-03_wp
 
-zln_kp2_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kp2_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_P2 value
@@ -1098,7 +1099,7 @@ zrt       = gasconst_bar_cm3_o_mol_k * t_k
 zdvi      =  -26.57_wp + 0.2020_wp*zt_degc -3.042E-03*zt_degc*zt_degc
 zdki      = ( -4.08_wp + 0.0714_wp*zt_degc)*1.0E-03_wp
 
-zln_kp3_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kp3_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_P3 value
@@ -1247,7 +1248,7 @@ zrt          = gasconst_bar_cm3_o_mol_k * t_k
 zdvi         =  -14.80_wp + zt_degc*(0.0020_wp - zt_degc*0.400E-03_wp)
 zdki         = (  2.89_wp + zt_degc*0.054_wp)*1.0E-03_wp
 
-zln_kh2s_pp  = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kh2s_pp  = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_H2S value
@@ -1324,7 +1325,7 @@ zrt          = gasconst_bar_cm3_o_mol_k * t_k
 zdvi         =  -26.43_wp + zt_degc*(0.0889_wp - zt_degc*0.905E-03_wp)
 zdki         = ( -5.03_wp + zt_degc*0.0814_wp)*1.0E-03_wp
 
-zln_knh4_pp  = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_knh4_pp  = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final K_NH4 value
@@ -1358,8 +1359,8 @@ REAL(KIND=wp) :: ACVT_KGH2O_O_KGSW
 
 REAL(KIND=wp), INTENT(IN) :: s
 
-!ACVT_KGH2O_O_KGSW = 1._wp - 0.0010049_wp*s ! libthdyct
-ACVT_KGH2O_O_KGSW = 1._wp - 0.001005_wp*s ! Handbook (2007)
+!ACVT_KGH2O_O_KGSW = one - 0.0010049_wp*s ! libthdyct
+ACVT_KGH2O_O_KGSW = one - 0.001005_wp*s ! Handbook (2007)
 
 RETURN
 
@@ -1472,7 +1473,7 @@ zrt          = gasconst_bar_cm3_o_mol_k * t_k
 zdvi         =   -9.78_wp + zt_degc*(-0.0090_wp - zt_degc*0.942E-03_wp)
 zdki         = ( -3.91_wp + zt_degc*0.054_wp)*1.0E-03_wp
 
-zln_khf_pp   = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_khf_pp   = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final \beta_HF value
@@ -1547,7 +1548,7 @@ zrt          = gasconst_bar_cm3_o_mol_k * t_k
 zdvi         =   -9.78_wp + zt_degc*(-0.0090_wp - zt_degc*0.942E-03_wp)
 zdki         = ( -3.91_wp + zt_degc*0.054_wp)*1.0E-03_wp
 
-zln_khf_pp   = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_khf_pp   = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final value of K_HF
@@ -1630,7 +1631,7 @@ zrt          = gasconst_bar_cm3_o_mol_k * t_k
 zdvi         =  -18.03_wp + zt_degc*(0.0466_wp + zt_degc*0.316E-03_wp)
 zdki         = ( -4.53_wp + zt_degc*0.0900_wp)*1.0E-03_wp
 
-zln_khso4_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_khso4_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! ln(K_HSO4) at p_bar = 0
@@ -1706,12 +1707,12 @@ zrt       = gasconst_bar_cm3_o_mol_k * t_k
 zdvi      =  -48.76_wp + 0.5304_wp*zt_degc
 zdki      = (-11.76_wp + 0.3692_wp*zt_degc)*1.0E-03_wp
 
-zln_kspcalc_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_kspcalc_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final value of Ksp_Calc
 
-ASP_CALC_MUCC83 = 10._wp**(zlog10_kspcalc_p0) * EXP(zln_kspcalc_pp)
+ASP_CALC_MUCC83 = ten**(zlog10_kspcalc_p0) * EXP(zln_kspcalc_pp)
 
 RETURN
 
@@ -1782,12 +1783,12 @@ zrt       = gasconst_bar_cm3_o_mol_k * t_k
 zdvi      =  -48.76_wp + 0.5304_wp*zt_degc  + 2.8_wp
 zdki      = (-11.76_wp + 0.3692_wp*zt_degc)*1.0E-03_wp
 
-zln_ksparag_pp = (-zdvi + zdki*p_bar/2._wp)*p_bar/zrt
+zln_ksparag_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
 
 
 ! Final value of Ksp_Arag
 
-ASP_ARAG_MUCC83 = 10._wp**(zlog10_ksparag_p0) * EXP(zln_ksparag_pp)
+ASP_ARAG_MUCC83 = ten**(zlog10_ksparag_p0) * EXP(zln_ksparag_pp)
 
 RETURN
 
@@ -1876,7 +1877,7 @@ FUNCTION A_FTOT_SALIN(s)
 ! Function returns total calcium concentration in mol/kg-SW
 ! given the salinity of a sample
 
-! References: Culkin (1965) (???)
+! References: Culkin (1965) (?)
 ! pH scale  : N/A
 
 
@@ -1983,8 +1984,8 @@ zso4_tot = A_SO4TOT_SALIN(s)
 zf_tot   = A_FTOT_SALIN(s)
 
 
-ACVT_HSWS_O_HTOT = 1._wp +  (zf_tot*ABETA_HF_DIRI79(t_k, s, p_bar)) &
-                           /(1._wp + zso4_tot/AK_HSO4_DICK90(t_k,s, p_bar))
+ACVT_HSWS_O_HTOT = one +  (zf_tot*ABETA_HF_DIRI79(t_k, s, p_bar)) &
+                           /(one + zso4_tot/AK_HSO4_DICK90(t_k,s, p_bar))
 
 RETURN
 
@@ -2038,7 +2039,7 @@ REAL(KIND=wp) :: zso4_tot
 zso4_tot = A_SO4TOT_SALIN(s)
 
 
-ACVT_HTOT_O_HFREE = 1._wp + zso4_tot/AK_HSO4_DICK90(t_k,s, p_bar)
+ACVT_HTOT_O_HFREE = one + zso4_tot/AK_HSO4_DICK90(t_k,s, p_bar)
 
 RETURN
 
@@ -2095,7 +2096,7 @@ zso4_tot = A_SO4TOT_SALIN(s)
 zf_tot   = A_FTOT_SALIN(s)
 
 
-ACVT_HSWS_O_HFREE = 1._wp + zf_tot*ABETA_HF_DIRI79(t_k, s, p_bar)              &
+ACVT_HSWS_O_HFREE = one + zf_tot*ABETA_HF_DIRI79(t_k, s, p_bar)              &
                           + zso4_tot/AK_HSO4_DICK90(t_k,s, p_bar)
 
 RETURN
