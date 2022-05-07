@@ -40,6 +40,10 @@
 
 
 MODULE MOD_PHSOLVERS
+#if defined(USEDUALNUMAD)
+    USE DNADMOD
+#endif
+
 USE MOD_PRECISION
 USE MOD_COMMON, ONLY: zero, one, two, three, four, nine, ten, hundred
 

@@ -1,6 +1,10 @@
 ! -*- f90 -*-
 MODULE MOD_COMMON
 !variable declarations etc for microCOSM model
+#if defined(USEDUALNUMAD)
+    USE DNADMOD
+#endif
+
 USE MOD_PRECISION
 USE MOD_BOXES
 IMPLICIT NONE

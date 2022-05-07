@@ -17,6 +17,10 @@
 !    You should have received a copy of the GNU Lesser General Public License
 !    along with SolveSAPHE.  If not, see <http://www.gnu.org/licenses/>.
 !
+#if defined(USEDUALNUMAD)
+       USE DNADMOD
+#endif
+
        USE MOD_PRECISION
        USE MOD_COMMON, ONLY : one, permil
        USE MOD_CHEMCONST

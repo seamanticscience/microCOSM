@@ -23,6 +23,10 @@
 
 
 MODULE MOD_CHEMCONST
+#if defined(USEDUALNUMAD)
+    USE DNADMOD
+#endif
+
 USE MOD_PRECISION
 USE MOD_COMMON, ONLY: one, two, ten, hundred
 

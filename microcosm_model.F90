@@ -21,6 +21,9 @@
 !=======================================================================
        PROGRAM MICROCOSM_MODEL
 !=======================================================================
+#if defined(USEDUALNUMAD)
+       USE DNADMOD
+#endif
        USE MOD_PRECISION
        USE MOD_BOXES
        USE MOD_MODELMAIN

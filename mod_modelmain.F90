@@ -1,6 +1,9 @@
 ! -*- f90 -*-
        MODULE MOD_MODELMAIN
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION 
+#if defined(USEDUALNUMAD)
+       USE DNADMOD
+#endif
        USE MOD_PRECISION
        USE MOD_BOXES
        USE MOD_DIMENSIONS
