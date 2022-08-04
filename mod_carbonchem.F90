@@ -18,7 +18,8 @@
 !    along with SolveSAPHE.  If not, see <http://www.gnu.org/licenses/>.
 !
        USE MOD_PRECISION
-       USE MOD_COMMON, ONLY : one, permil
+       USE MOD_COMMON, ONLY : one, permil, conv_molkg_molm3,           &
+                               conv_cmhr_ms, Kwexch_av
        USE MOD_CHEMCONST
        USE MOD_PHSOLVERS
        USE MOD_CHEMSPECIATION
@@ -255,29 +256,28 @@
       REAL(KIND=wp), INTENT(IN)                     :: pco2atmos
           
 !    Local variables       
-      REAL(KIND=wp),   DIMENSION(nbox) :: scadic, Kwexch
+      REAL(KIND=wp),   DIMENSION(nbox) :: schmidtDIC, Kwexch
       REAL(KIND=wp),   DIMENSION(nbox) :: co3, hco3, co2aq
-      
       INTEGER                          :: i
       
 ! Initialize
       pco2ocean = 0._wp
       fluxCO2   = 0._wp
-      scadic    = 0._wp
+      schmidtDIC    = 0._wp
       Kwexch    = 0._wp
       co3       = 0._wp
       hco3      = 0._wp
       co2aq     = 0._wp
-           
+        
 !     calculate SCHMIDT NO. for CO2 (4th order, Wanninkhof 2014)
-      scadic =  2116.8_wp                                              &
-              -  136.25_wp     * theta                                 &
-              +    4.7353_wp   * theta * theta                         &
-              -    0.092307_wp * theta * theta * theta                 &
-              +    7.555e-4_wp * theta * theta * theta * theta
+      schmidtDIC =  2116.8_wp                                          &
+                 -  136.25_wp     * theta                              &
+                 +    4.7353_wp   * theta * theta                      &
+                 -    0.092307_wp * theta * theta * theta              &
+                 +    7.555e-4_wp * theta * theta * theta * theta
 
-      Kwexch =  (0.337_wp * wind**two/3.6e5_wp) * fopen              &
-                / sqrt(scadic/660._wp)    
+      Kwexch =  (Kwexch_av * conv_cmhr_ms * wind*wind * fopen )        &
+                / sqrt(schmidtDIC/660._wp)    
                
       do i = 1,nbox
           ! calculate surface coefficients 
@@ -298,19 +298,15 @@
                            co3(i),                                     &
                           hco3(i),                                     &
                          co2aq(i))
-           
-!Flux = kw*rho*(ff*pCO2atm-k0*FugFac*pCO2ocean)
+
           fluxCO2(i) = Kwexch(i)*(                                     &
                                pco2atmos    * apiff_atm -              &
                                pco2ocean(i) * apiff_oce                &
                              * api0_dic )
-                  
       end do
 
-!      convert flux (mol kg-1 m s-1) to (mol m-2 s-1)
-      fluxCO2 = fluxCO2/permil
-
-      RETURN
+      fluxCO2 = fluxCO2 * conv_molkg_molm3
+RETURN
       END SUBROUTINE CARBON_FLUXES
 !=======================================================================
 

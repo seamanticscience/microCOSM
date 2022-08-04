@@ -63,45 +63,11 @@ RETURN
 END SUBROUTINE ESTABLISH_DIMENSIONS
 !=======================================================================
 
-!=======================================================================
-FUNCTION TRANSPORT(x, kappa, psi, invol)
-! atmosphere-3-box-ocean carbon cycle model
-! evaluate rates of change due to transport
-! mick follows, march 2015/ june 2016
-USE MOD_BOXES
-IMPLICIT NONE
-REAL(KIND=wp), DIMENSION(nbox)                  :: TRANSPORT
-REAL(KIND=wp), intent(in), DIMENSION(nbox)      :: x
-REAL(KIND=wp), intent(in), DIMENSION(nbox,nbox) :: kappa
-REAL(KIND=wp), intent(in)                       :: psi
-REAL(KIND=wp), intent(in), DIMENSION(nbox)      :: invol
-!
-TRANSPORT(1) = invol(1) * (                                            &
-            psi*(x(3)-x(1))                                            &
-          + kappa(3,1)*(x(3)-x(1))                                     &
-          + kappa(2,1)*(x(2)-x(1))                                     &
-            )
-TRANSPORT(2) = invol(2) * (                                            &
-            psi*(x(1)-x(2))                                            &
-          + kappa(1,2)*(x(1)-x(2))                                     &
-          + kappa(3,2)*(x(3)-x(2))                                     &
-            )
-TRANSPORT(3) = invol(3) * (                                            &
-            psi*(x(2)-x(3))                                            &
-          + kappa(2,3)*(x(2)-x(3))                                     &
-          + kappa(1,3)*(x(1)-x(3))                                     &
-            )
-
-       RETURN
-       END FUNCTION TRANSPORT
-!=======================================================================
-
-! !=======================================================================
-! FUNCTION TRANSPORT(x, kappa, psi, invol)
-! !atmosphere-5-box-ocean carbon cycle model
-! ! a la Follows, Ito and Marotzke, 2002 GBC 
-! !evaluate rates of change due to transport
-! 
+!!=======================================================================
+!FUNCTION TRANSPORT(x, kappa, psi, invol)
+!!atmosphere-3-box-ocean carbon cycle model
+!!evaluate rates of change due to transport
+!!mick follows, march 2015/ june 2016
 ! USE MOD_BOXES
 ! IMPLICIT NONE
 ! REAL(KIND=wp), DIMENSION(nbox)                  :: TRANSPORT
@@ -111,14 +77,12 @@ TRANSPORT(3) = invol(3) * (                                            &
 ! REAL(KIND=wp), intent(in), DIMENSION(nbox)      :: invol
 ! !
 ! TRANSPORT(1) = invol(1) * (                                            &
-!             psi(1)*(x(5)-x(1))                                         &
-!           + kappa(5,1)*(x(5)-x(1))                                     &
+!             psi*(x(3)-x(1))                                            &
+!           + kappa(3,1)*(x(3)-x(1))                                     &
 !           + kappa(2,1)*(x(2)-x(1))                                     &
-!           + kappa(3,1)*(x(3)-x(1)))                                    &
 !             )
 ! TRANSPORT(2) = invol(2) * (                                            &
-!             psi(1)*(x(1)-x(2))                                         &
-!           + psi(2)*(x(4)-x(2))  
+!             psi*(x(1)-x(2))                                            &
 !           + kappa(1,2)*(x(1)-x(2))                                     &
 !           + kappa(3,2)*(x(3)-x(2))                                     &
 !             )
@@ -130,7 +94,7 @@ TRANSPORT(3) = invol(3) * (                                            &
 ! 
 !        RETURN
 !        END FUNCTION TRANSPORT
-! !=======================================================================
+!!=======================================================================
 
 !=======================================================================
 FUNCTION CALC_PSTAR(nutrient)

@@ -4,7 +4,7 @@
        USE MOD_PRECISION
        USE MOD_BOXES
        USE MOD_DIMENSIONS
-       use MOD_COMMON
+       USE MOD_COMMON
        USE MOD_CARBONCHEM
 IMPLICIT NONE
 ! --------------------------------------------------------
@@ -26,24 +26,26 @@ IMPLICIT NONE
             dx,                                                        &
             dy,                                                        &
             dz,                                                        &
-            K,                                                         &
-            R,                                                         &
-            psi,                                                       &
+            Kin,                                                       &
+            Rin,                                                       &
+            Pin,                                                       &
+            psi_in,                                                    &
+            dif_in,                                                    &    
             alpha_yr,                                                  &
-            gamma_Fe,                                                  &
-            lt_lifetime,                                               &
-            dlambdadz,                                                 &
+            gamma_in,                                                  &
+            lt_lifein,                                                 &
+            dldz_in,                                                   &
             fe_input,                                                  &
-            wind,                                                      &
-            fopen,                                                     &
+            wind_in,                                                   &
+            foin,                                                      &
             thin,                                                      &
             sain,                                                      &
-            cin,                                                       &
-            ain,                                                       &
-            pin,                                                       &
-            nin,                                                       &
-            fin,                                                       &
-            lin,                                                       &
+            cain,                                                      &
+            alin,                                                      &
+            phin,                                                      &
+            niin,                                                      &
+            fein,                                                      &
+            ltin,                                                      &
             atpco2in,                                                  &
             tout,                                                      &            
             thout,                                                     &
@@ -68,29 +70,30 @@ IMPLICIT NONE
        REAL(KIND=wp), intent(in) ::                                    &
             maxyears,                                                  &
             outputyears,                                               &
-            psi,                                                       &
+            psi_in,                                                    &
+            dif_in,                                                    &
             alpha_yr,                                                  &
-            gamma_Fe,                                                  & 
-            lt_lifetime,                                               &
+            gamma_in,                                                  & 
+            lt_lifein,                                                 &
             atpco2in
 
        REAL(KIND=wp), intent(in), dimension (nbox) ::                  &
             dx, dy, dz,                                                &
             thin,                                                      &
             sain,                                                      &
-            cin,                                                       &
-            ain,                                                       &
-            pin,                                                       &
-            nin,                                                       &
-            fin,                                                       &
-            lin,                                                       &
+            cain,                                                      &
+            alin,                                                      &
+            phin,                                                      &
+            niin,                                                      &
+            fein,                                                      &
+            ltin,                                                      &
             fe_input,                                                  &
-            dlambdadz,                                                 &
-            wind,                                                      &
-            fopen
+            dldz_in,                                                   &
+            wind_in,                                                   &
+            foin
 
        REAL(KIND=wp), intent(in), dimension (nbox, nbox) ::            &
-            K, R
+            Kin, Rin, Pin
      
        REAL(KIND=wp), intent(out), dimension (outstepmax,nbox) ::      &
             thout,                                                     &
@@ -131,18 +134,27 @@ IMPLICIT NONE
        CALL establish_dimensions(dx,dy,dz,lat,area,vol,invol,          &
                                           depth,pressure)
 
+! Set model variables from input values
        theta = thin
        salt  = sain
 ! convert from u/nmol kg-1 to moles m-3
-       dic = cin * umolkg2molm3
-       alk = ain * umolkg2molm3
-       po4 = pin * umolkg2molm3
-       no3 = nin * umolkg2molm3
-       fet = fin * nmolkg2molm3
-       lt  = lin * nmolkg2molm3
-       sit = pin * umolkg2molm3 * rSIP
-       
-       ph  = eight
+       dic = cain * umolkg2molm3
+       alk = alin * umolkg2molm3
+       po4 = phin * umolkg2molm3
+       no3 = niin * umolkg2molm3
+       fet = fein * nmolkg2molm3
+       lt  = ltin * nmolkg2molm3
+       sit = phin * umolkg2molm3 * rSIP
+              
+! More config/forcing variables       
+       K   = Kin
+       R   = Rin
+       P   = Pin
+       psi = psi_in  
+       dif = dif_in
+       wind= wind_in
+       fopen=foin                
+ 
 ! initialize tracer rates of change
 ! temp, salt, and si are passive for now, just for co2 solubility
        dthetadt = zero 
@@ -155,23 +167,10 @@ IMPLICIT NONE
        dltdt    = zero 
        dsitdt   = zero 
 
-!! Iron cycle parameters ......... 
-! Iron external source
-!  convert to mol Fe m-2 s-1
-       fe_depo = fe_input / (weight_fe*speryr)
-
-! ligand parameters 
-! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
-       if (lt_lifetime.LE.zero) then
-          lambda = zero
-       else
-          lambda = dlambdadz/lt_lifetime
-       endif
-       
 ! Export production parameters (Parekh et al, 2005):
 ! max export prodution rate: (again, phosphorus units, mol P m-3 s-1)
 !      alpha = 0.5d-6 * conv / (30.0*86400.0) ! Recover with alpha_yr=6e-6
-       alpha = alpha_yr * conv / (speryr) 
+       alpha = alpha_yr * conv_molkg_molm3 / (speryr) 
        
 ! Initial export production and nutrient limitation code
        light  = zero
@@ -182,8 +181,25 @@ IMPLICIT NONE
        export = zero
        lim    = 0
 
+!! Iron cycle parameters ......... 
+! Iron external source
+!  convert to mol Fe m-2 s-1
+       fe_depo = fe_input / (weight_fe*speryr)
+
+! ligand parameters 
+       gamma_Fe   = gamma_in                                              
+       dlambdadz  = dldz_in
+       lt_lifetime= lt_lifein
+
+!! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
+       if (lt_lifetime.LE.zero) then
+          lambda = zero
+       else
+          lambda = dlambdadz/lt_lifetime
+       endif
+
 ! evaluate pstar, consistent with Harvardton Bears SO sensitivity
-       pstar = calc_pstar(po4) 
+       pstar = MAX(calc_pstar(po4), calc_pstar(no3)) 
        
 ! Initialize atmospheric carbon content
 ! Mass dry atmosphere = (5.1352+/-0.0003)d18 kg (Trenberth & Smith,
@@ -263,19 +279,19 @@ IMPLICIT NONE
 
 ! Write initial conditions to file
            write(14,fmt) int(timeM),                                   & 
-                               lim,                                    & 
-                            thetaM,                                    & 
-                             saltM,                                    &
-                              dicM,                                    & 
-                              alkM,                                    &
-                              po4M,                                    &
-                              no3M,                                    &
-                              fetM,                                    &
-                               ltM,                                    &
-                           exportM,                                    &
-                            pstarM,                                    &
-                             pco2M,                                    &
-                             pco2A
+                                lim,                                   & 
+                             thetaM,                                   & 
+                              saltM,                                   &
+                               dicM,                                   & 
+                               alkM,                                   &
+                               po4M,                                   &
+                               no3M,                                   &
+                               fetM,                                   &
+                                ltM,                                   &
+                            exportM,                                   &
+                             pstarM,                                   &
+                              pco2M,                                   &
+                              pco2A                             
 #endif
 
 ! output to array
@@ -295,18 +311,18 @@ IMPLICIT NONE
        atpco2out (outstep) = pco2A
 ! Increment outstep
        outstep=outstep+1
-         
+
 ! timestepping .........................................
        do 200 nstep = 1,nstepmax
 ! evaluate rates of change due to transport
 !         dthetadt = transport(nbox, theta, K, psi, invol) 
 !         dsaltdt  = transport(nbox, salt,  K, psi, invol) 
-         ddicdt = TRANSPORT(dic, K, psi, invol) 
-         dalkdt = TRANSPORT(alk, K, psi, invol) 
-         dpo4dt = TRANSPORT(po4, K, psi, invol) 
-         dno3dt = TRANSPORT(no3, K, psi, invol) 
-         dfetdt = TRANSPORT(fet, K, psi, invol) 
-         dltdt  = TRANSPORT(lt,  K, psi, invol) 
+         ddicdt = TRANSPORT(dic, P, psi, K, dif, invol) 
+         dalkdt = TRANSPORT(alk, P, psi, K, dif, invol) 
+         dpo4dt = TRANSPORT(po4, P, psi, K, dif, invol)  
+         dno3dt = TRANSPORT(no3, P, psi, K, dif, invol) 
+         dfetdt = TRANSPORT(fet, P, psi, K, dif, invol) 
+         dltdt  = TRANSPORT(lt,  P, psi, K, dif, invol) 
 
          time=nstep*dt / (speryr) 
 
@@ -328,12 +344,12 @@ IMPLICIT NONE
                          pressure,                                     &
                         pco2ocean,                                     &
                           fluxCO2) 
-                
+
          netco2flux = netco2flux + sum(fluxCO2 * area)
          
 ! Make sure subsurface boxes are masked by fopen = 0         
          ddicdt     = ddicdt     + fluxCO2 / dz
-         
+
 ! biological terms
          light  = INSOL(time * speryr, lat)
          
@@ -364,7 +380,7 @@ IMPLICIT NONE
 ! For DIC carbonate is the export of 1 mol C (_C_O32-)   
 ! -ve bioP is uptake by phytoplankton, +ve bioP is net remineralization
        ddicdt = ddicdt + one * carb + export * rCP 
-
+       
 ! Whereas for ALK carbonate is the export of 2 mol ions (CO3_2-_) 
 !     there is also change in ions due to consumption of nitrate
        dalkdt = dalkdt + two * carb - export * rNP
@@ -372,8 +388,6 @@ IMPLICIT NONE
 ! Dynamic ligand production is based on exudation in the surface layers depending on 
 !   production and release during remineralization in the ocean interior
        dltdt  = dltdt + (abs(export) * gamma_Fe)  - (lambda * lt) 
-
-! end of surface boxes loop
 
 ! input of iron (can include (vent source)/fe_sol)
        dfetdt = dfetdt + fe_sol * fe_depo / dz 
@@ -398,7 +412,7 @@ IMPLICIT NONE
                              netco2flux,                               &
                              pco2atmos)
 #endif
-
+     
 ! Euler forward step concentrations
        theta = theta + dthetadt * dt 
        salt  = salt  + dsaltdt  * dt 
@@ -410,7 +424,7 @@ IMPLICIT NONE
        lt    = lt    + dltdt    * dt 
 
 ! evaluate pstar
-       pstar  = calc_pstar(po4) 
+       pstar  = MAX(calc_pstar(po4), calc_pstar(no3)) 
        time   = nstep*dt / speryr 
 
 ! Increment the average accumulators
@@ -449,7 +463,6 @@ IMPLICIT NONE
          pco2A  = pco2A  /(outputyears*speryr/dt)
          
          exportM= exportM/(outputyears*speryr/dt)
-
 #if defined(WRITEOUTFILE)           
 ! Write model state to file                             
            write(14,fmt) int(timeM),                                   & 
@@ -513,6 +526,30 @@ IMPLICIT NONE
 #endif
        RETURN
        END SUBROUTINE MODEL
+!=======================================================================
+
+!=======================================================================
+! evaluate rates of change due to transport
+FUNCTION TRANSPORT(conc, pmask, psi, kmask, kappa, invol)
+
+USE MOD_BOXES
+IMPLICIT NONE
+REAL(KIND=wp), DIMENSION(nbox)                  :: TRANSPORT
+REAL(KIND=wp), intent(in), DIMENSION(nbox)      :: conc, invol
+REAL(KIND=wp), intent(in), DIMENSION(nbox,nbox) :: pmask, kmask
+REAL(KIND=wp), intent(in)                       :: psi, kappa
+!
+REAL(KIND=wp), DIMENSION(nbox,nbox) :: dconc
+#if defined(USEDUALNUMAD)
+INTEGER                             :: i
+#endif
+
+       dconc = spread(conc,1,nbox) - transpose(spread(conc,1,nbox))
+
+       TRANSPORT = invol * sum( ( psi*pmask + kappa*kmask ) * dconc, 2 )
+
+       RETURN
+       END FUNCTION TRANSPORT
 !=======================================================================
 
 !=======================================================================
