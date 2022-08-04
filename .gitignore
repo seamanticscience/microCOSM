@@ -17,6 +17,7 @@ __pycache__/
 # Fortran extensions
 *.o
 *.mod
+*.f
 
 # Distribution / packaging
 .Python
