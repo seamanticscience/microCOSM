@@ -7,7 +7,7 @@
        USE MOD_PRECISION
        USE MOD_BOXES
        USE MOD_DIMENSIONS
-       use MOD_COMMON
+       USE MOD_COMMON
        USE MOD_CARBONCHEM
 IMPLICIT NONE
 ! --------------------------------------------------------
@@ -29,24 +29,26 @@ IMPLICIT NONE
             dx,                                                        &
             dy,                                                        &
             dz,                                                        &
-            K,                                                         &
-            R,                                                         &
-            psi,                                                       &
+            Kin,                                                       &
+            Rin,                                                       &
+            Pin,                                                       &
+            psi_in,                                                    &
+            dif_in,                                                    &
             alpha_yr,                                                  &
-            gamma_Fe,                                                  &
-            lt_lifetime,                                               &
-            dlambdadz,                                                 &
+            gamma_in,                                                  &
+            lt_lifein,                                                 &
+            dldz_in,                                                   &
             fe_input,                                                  &
-            wind,                                                      &
-            fopen,                                                     &
+            wind_in,                                                   &
+            foin,                                                      &
             thin,                                                      &
             sain,                                                      &
-            cin,                                                       &
-            ain,                                                       &
-            pin,                                                       &
-            nin,                                                       &
-            fin,                                                       &
-            lin,                                                       &
+            cain,                                                      &
+            alin,                                                      &
+            phin,                                                      &
+            niin,                                                      &
+            fein,                                                      &
+            ltin,                                                      &
             atpco2in,                                                  &
             tout,                                                      &            
             thout,                                                     &
@@ -61,7 +63,22 @@ IMPLICIT NONE
             nlout,                                                     &
             psout,                                                     &
             ocpco2out,                                                 &
-            atpco2out                                                  &        
+            atpco2out                                                  &
+#if defined(USEDUALNUMAD)
+            ,tdxout,                                                   &
+            thdxout,                                                   &
+            sdxout,                                                    &
+            cdxout,                                                    &
+            adxout,                                                    &
+            pdxout,                                                    &
+            ndxout,                                                    &
+            fdxout,                                                    &
+            ldxout,                                                    &
+            expdxout,                                                  &
+            psdxout,                                                   &
+            ocpco2dxout,                                               &
+            atpco2dxout                                                &
+#endif
             )
 
 !-----------------------------------------------------------------------         
@@ -71,29 +88,30 @@ IMPLICIT NONE
        REAL(KIND=wp), intent(in) ::                                    &
             maxyears,                                                  &
             outputyears,                                               &
-            psi,                                                       &
+            psi_in,                                                    &
+            dif_in,                                                    &
             alpha_yr,                                                  &
-            gamma_Fe,                                                  & 
-            lt_lifetime,                                               &
+            gamma_in,                                                  & 
+            lt_lifein,                                                 &
             atpco2in
 
        REAL(KIND=wp), intent(in), dimension (nbox) ::                  &
             dx, dy, dz,                                                &
             thin,                                                      &
             sain,                                                      &
-            cin,                                                       &
-            ain,                                                       &
-            pin,                                                       &
-            nin,                                                       &
-            fin,                                                       &
-            lin,                                                       &
+            cain,                                                      &
+            alin,                                                      &
+            phin,                                                      &
+            niin,                                                      &
+            fein,                                                      &
+            ltin,                                                      &
             fe_input,                                                  &
-            dlambdadz,                                                 &
-            wind,                                                      &
-            fopen
+            dldz_in,                                                   &
+            wind_in,                                                   &
+            foin
 
        REAL(KIND=wp), intent(in), dimension (nbox, nbox) ::            &
-            K, R
+            Kin, Rin, Pin
      
        REAL(KIND=wp), intent(out), dimension (outstepmax,nbox) ::      &
             thout,                                                     &
@@ -106,7 +124,7 @@ IMPLICIT NONE
             lout,                                                      &
             expout,                                                    &
             ocpco2out
-            
+
        REAL(KIND=wp), intent(out), dimension (outstepmax) ::           &
             tout,                                                      &
             psout,                                                     &
@@ -115,9 +133,30 @@ IMPLICIT NONE
        INTEGER, intent(out), dimension (outstepmax) ::                 &
             nlout                                                     
 
+#if defined(USEDUALNUMAD)
+       REAL(KIND=wp), intent(out), dimension (outstepmax,ndv,nbox) ::  &
+            thdxout,                                                   &
+            sdxout,                                                    &
+            cdxout,                                                    &
+            adxout,                                                    &
+            pdxout,                                                    &
+            ndxout,                                                    &
+            fdxout,                                                    &
+            ldxout,                                                    &
+            expdxout,                                                  &
+            ocpco2dxout
+
+       REAL(KIND=wp), intent(out), dimension (outstepmax,ndv) ::       &
+            tdxout,                                                    &
+            psdxout,                                                   &
+            atpco2dxout
+
+       REAL(KIND=wp), dimension (ndv,ndv) :: dxvec
+#endif
+
 ! local variables
 !       include "comdeck.h"
-       INTEGER       :: nstep, outstep
+       INTEGER       :: nstep, outstep, idv
        REAL(KIND=wp) :: time
        CHARACTER*64  :: fmt, inifmt, varfmt, frep, filename
 !-----------------------------------------------------------------------         
@@ -134,18 +173,27 @@ IMPLICIT NONE
        CALL establish_dimensions(dx,dy,dz,lat,area,vol,invol,          &
                                           depth,pressure)
 
+! Set model variables from input values
        theta = thin
        salt  = sain
 ! convert from u/nmol kg-1 to moles m-3
-       dic = cin * umolkg2molm3
-       alk = ain * umolkg2molm3
-       po4 = pin * umolkg2molm3
-       no3 = nin * umolkg2molm3
-       fet = fin * nmolkg2molm3
-       lt  = lin * nmolkg2molm3
-       sit = pin * umolkg2molm3 * rSIP
-       
-       ph  = eight
+       dic = cain * umolkg2molm3
+       alk = alin * umolkg2molm3
+       po4 = phin * umolkg2molm3
+       no3 = niin * umolkg2molm3
+       fet = fein * nmolkg2molm3
+       lt  = ltin * nmolkg2molm3
+       sit = phin * umolkg2molm3 * rSIP
+
+! More config/forcing variables
+       K   = Kin
+       R   = Rin
+       P   = Pin
+       psi = psi_in  
+       dif = dif_in
+       wind= wind_in
+       fopen=foin
+
 ! initialize tracer rates of change
 ! temp, salt, and si are passive for now, just for co2 solubility
        dthetadt = zero 
@@ -158,23 +206,10 @@ IMPLICIT NONE
        dltdt    = zero 
        dsitdt   = zero 
 
-!! Iron cycle parameters ......... 
-! Iron external source
-!  convert to mol Fe m-2 s-1
-       fe_depo = fe_input / (weight_fe*speryr)
-
-! ligand parameters 
-! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
-       if (lt_lifetime.LE.zero) then
-          lambda = zero
-       else
-          lambda = dlambdadz/lt_lifetime
-       endif
-       
 ! Export production parameters (Parekh et al, 2005):
 ! max export prodution rate: (again, phosphorus units, mol P m-3 s-1)
 !      alpha = 0.5d-6 * conv / (30.0*86400.0) ! Recover with alpha_yr=6e-6
-       alpha = alpha_yr * conv / (speryr) 
+       alpha = alpha_yr * conv_molkg_molm3 / (speryr) 
        
 ! Initial export production and nutrient limitation code
        light  = zero
@@ -185,8 +220,65 @@ IMPLICIT NONE
        export = zero
        lim    = 0
 
+!! Iron cycle parameters .........
+! Iron external source
+!  convert to mol Fe m-2 s-1
+       fe_depo = fe_input / (weight_fe*speryr)
+
+! ligand parameters
+       gamma_Fe   = gamma_in
+       dlambdadz  = dldz_in
+       lt_lifetime= lt_lifein
+
+#if !defined(USEDUALNUMAD)
+!! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
+       if (lt_lifetime.LE.zero) then
+          lambda = zero
+       else
+          lambda = dlambdadz/lt_lifetime
+       endif
+#else
+! Set the Dual number sensitivities
+        dxvec      = 0.0_wp
+        dxvec(1,1) = alpha%x
+        dxvec(2,2) = kno3%x
+        dxvec(3,3) = kpo4%x
+        dxvec(4,4) = kfe%x
+        dxvec(5,5) = klight%x
+        dxvec(6,6) = psi%x
+        dxvec(7,7) = dif%x
+        dxvec(8,8) = gamma_Fe%x
+        dxvec(9,9) = lt_lifetime%x
+
+       ! max export prodution rate: phosphorus units! (mol P m-3 s-1)
+       alpha       = dual(alpha%x      , dxvec(1,:)%x)
+       ! half saturation for nitrate limitation (mol m-3)
+       kno3        =  dual(kno3%x      , dxvec(2,:)%x)
+       ! half saturation for phosphate limitation (mol m-3)
+       kpo4        =  dual(kpo4%x      , dxvec(3,:)%x)
+       ! half saturation for iron limitation (mol m-3)
+       kfe         =  dual(kfe%x       , dxvec(4,:)%x)
+       ! half saturation for light limitation (W m-2)
+       klight      = dual(klight%x     , dxvec(5,:)%x)
+       ! MOC (Sv)
+       psi         = dual(psi%x        , dxvec(6,:)%x)
+       ! Mixing (Sv)
+       dif         = dual(dif%x        , dxvec(7,:)%x)
+       ! Ligand production rate
+       gamma_Fe    = dual(gamma_Fe%x   , dxvec(8,:)%x)
+       ! Ligand lifetime
+       lt_lifetime = dual(lt_lifetime%x, dxvec(9,:)%x)
+       
+       !! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
+       if (lt_lifetime.LE.zero) then
+          lambda = zero
+       else
+          lambda = dlambdadz/lt_lifetime
+       endif
+#endif
+
 ! evaluate pstar, consistent with Harvardton Bears SO sensitivity
-       pstar = calc_pstar(po4) 
+       pstar = MAX(calc_pstar(po4), calc_pstar(no3))
        
 ! Initialize atmospheric carbon content
 ! Mass dry atmosphere = (5.1352+/-0.0003)d18 kg (Trenberth & Smith,
@@ -263,24 +355,111 @@ IMPLICIT NONE
 !          fmt='('//trim(fmt)//trim(frep)//'('//trim(varfmt)//'))'
            write(fmt,'(6A)') '(',trim(inifmt),trim(frep),'(',trim(varfmt),'))'
 
+#if defined(USEDUALNUMAD)
+! Write initial conditions to file
+           write(14,fmt) int(timeM%x),                                 &
+                                  lim,                                 &
+                             thetaM%x,                                 &
+                              saltM%x,                                 &
+                               dicM%x,                                 &
+                               alkM%x,                                 &
+                               po4M%x,                                 &
+                               no3M%x,                                 &
+                               fetM%x,                                 &
+                                ltM%x,                                 &
+                            exportM%x,                                 &
+                             pstarM%x,                                 &
+                              pco2M%x,                                 &
+                              pco2A%x
+
+          write (filename, '(a,I0.6,a)') 'microCOSMDNAD',id,'.dat'
+          open(15,file=filename,status='unknown')
+
+! write column header output 
+           write(15,*)'     t(yr)     iDv     ',                       &
+               repeat('  THETA    ',nbox),                             &
+               repeat(' SALT      ',nbox),                             &
+               repeat('DIC        ',nbox),                             &
+               repeat('ALK        ',nbox),                             &
+               repeat('   PO4     ',nbox),                             &
+               repeat('  NO3      ',nbox),                             &
+               repeat('   FET     ',nbox),                             &
+               repeat('   LIG     ',nbox),                             &
+               repeat('   EXPORT  ',nbox),                             &
+               '   P*      ',                                          &
+               repeat(' OCPCO2    ',nbox),                             &
+               ' ATPCO2    '
 
 ! Write initial conditions to file
+           do idv = 1, ndv
+               write(15,fmt)  int(timeM%x),                            &
+                                  int(idv),                            &
+                            thetaM%dx(idv),                            &
+                             saltM%dx(idv),                            &
+                              dicM%dx(idv),                            &
+                              alkM%dx(idv),                            &
+                              po4M%dx(idv),                            &
+                              no3M%dx(idv),                            &
+                              fetM%dx(idv),                            &
+                               ltM%dx(idv),                            &
+                           exportM%dx(idv),                            &
+                            pstarM%dx(idv),                            &
+                             pco2M%dx(idv),                            &
+                             pco2A%dx(idv)
+           enddo
+#else
+! Write initial conditions to file
            write(14,fmt) int(timeM),                                   & 
-                               lim,                                    & 
-                            thetaM,                                    & 
-                             saltM,                                    &
-                              dicM,                                    & 
-                              alkM,                                    &
-                              po4M,                                    &
-                              no3M,                                    &
-                              fetM,                                    &
-                               ltM,                                    &
-                           exportM,                                    &
-                            pstarM,                                    &
-                             pco2M,                                    &
-                             pco2A
+                                lim,                                   & 
+                             thetaM,                                   & 
+                              saltM,                                   &
+                               dicM,                                   & 
+                               alkM,                                   &
+                               po4M,                                   &
+                               no3M,                                   &
+                               fetM,                                   &
+                                ltM,                                   &
+                            exportM,                                   &
+                             pstarM,                                   &
+                              pco2M,                                   &
+                              pco2A
+#endif
 #endif
 
+#if defined(USEDUALNUMAD)
+! output to array
+       thout     (outstep,1:nbox) = thetaM%x
+       sout      (outstep,1:nbox) = saltM%x
+       cout      (outstep,1:nbox) = dicM%x
+       aout      (outstep,1:nbox) = alkM%x
+       pout      (outstep,1:nbox) = po4M%x
+       nout      (outstep,1:nbox) = no3M%x
+       fout      (outstep,1:nbox) = fetM%x
+       lout      (outstep,1:nbox) = ltM%x
+       expout    (outstep,1:nbox) = exportM%x
+       ocpco2out (outstep,1:nbox) = pco2M%x
+       tout      (outstep) = timeM%x
+       nlout     (outstep) = lim
+       psout     (outstep) = pstarM%x
+       atpco2out (outstep) = pco2A%x
+
+! output to array
+       do idv = 1, ndv
+           thdxout     (outstep,idv,1:nbox) = theta%dx(idv)
+           sdxout      (outstep,idv,1:nbox) = salt%dx (idv)
+           cdxout      (outstep,idv,1:nbox) = dicM%dx (idv)
+           adxout      (outstep,idv,1:nbox) = alkM%dx (idv)
+           pdxout      (outstep,idv,1:nbox) = po4M%dx (idv)
+           ndxout      (outstep,idv,1:nbox) = no3M%dx (idv)
+           fdxout      (outstep,idv,1:nbox) = fetM%dx (idv)
+           ldxout      (outstep,idv,1:nbox) = ltM%dx  (idv)
+           expdxout    (outstep,idv,1:nbox) = exportM%dx(idv)
+           ocpco2dxout (outstep,idv,1:nbox) = pco2M%dx(idv)
+           tdxout      (outstep,idv) = timeM%dx       (idv)
+           psdxout     (outstep,idv) = pstarM%dx      (idv)
+           atpco2dxout (outstep,idv) = pco2A%dx       (idv)
+       end do
+#else
 ! output to array
        thout     (outstep,1:nbox) = thetaM
        sout      (outstep,1:nbox) = saltM
@@ -296,20 +475,23 @@ IMPLICIT NONE
        nlout     (outstep) = lim
        psout     (outstep) = pstarM
        atpco2out (outstep) = pco2A
+#endif
 ! Increment outstep
        outstep=outstep+1
-         
+
 ! timestepping .........................................
        do 200 nstep = 1,nstepmax
+!         write(6,*) "timestep ="
+!         write(6,*) nstep
 ! evaluate rates of change due to transport
 !         dthetadt = transport(nbox, theta, K, psi, invol) 
 !         dsaltdt  = transport(nbox, salt,  K, psi, invol) 
-         ddicdt = TRANSPORT(dic, K, psi, invol) 
-         dalkdt = TRANSPORT(alk, K, psi, invol) 
-         dpo4dt = TRANSPORT(po4, K, psi, invol) 
-         dno3dt = TRANSPORT(no3, K, psi, invol) 
-         dfetdt = TRANSPORT(fet, K, psi, invol) 
-         dltdt  = TRANSPORT(lt,  K, psi, invol) 
+         ddicdt = TRANSPORT(dic, P, psi, K, dif, invol)
+         dalkdt = TRANSPORT(alk, P, psi, K, dif, invol)
+         dpo4dt = TRANSPORT(po4, P, psi, K, dif, invol)
+         dno3dt = TRANSPORT(no3, P, psi, K, dif, invol)
+         dfetdt = TRANSPORT(fet, P, psi, K, dif, invol)
+         dltdt  = TRANSPORT(lt,  P, psi, K, dif, invol)
 
          time=nstep*dt / (speryr) 
 
@@ -331,12 +513,12 @@ IMPLICIT NONE
                          pressure,                                     &
                         pco2ocean,                                     &
                           fluxCO2) 
-                
+
          netco2flux = netco2flux + sum(fluxCO2 * area)
          
 ! Make sure subsurface boxes are masked by fopen = 0         
          ddicdt     = ddicdt     + fluxCO2 / dz
-         
+
 ! biological terms
          light  = INSOL(time * speryr, lat)
          
@@ -376,8 +558,6 @@ IMPLICIT NONE
 !   production and release during remineralization in the ocean interior
        dltdt  = dltdt + (abs(export) * gamma_Fe)  - (lambda * lt) 
 
-! end of surface boxes loop
-
 ! input of iron (can include (vent source)/fe_sol)
        dfetdt = dfetdt + fe_sol * fe_depo / dz 
 
@@ -413,7 +593,7 @@ IMPLICIT NONE
        lt    = lt    + dltdt    * dt 
 
 ! evaluate pstar
-       pstar  = calc_pstar(po4) 
+       pstar  = MAX(calc_pstar(po4), calc_pstar(no3))
        time   = nstep*dt / speryr 
 
 ! Increment the average accumulators
@@ -435,7 +615,11 @@ IMPLICIT NONE
 
 
 ! if an output time, write some output to screen and file
+#if defined(USEDUALNUMAD)
+       if (mod(time%x,outputyears%x) .eq. 0)then
+#else
        if (mod(time,outputyears) .eq. 0)then
+#endif
 ! For output, work out what the average is
          timeM  = timeM  /(outputyears*speryr/dt)
          thetaM = thetaM /(outputyears*speryr/dt)
@@ -452,8 +636,42 @@ IMPLICIT NONE
          pco2A  = pco2A  /(outputyears*speryr/dt)
          
          exportM= exportM/(outputyears*speryr/dt)
-
 #if defined(WRITEOUTFILE)           
+#if defined(USEDUALNUMAD)
+! Write model state to file
+           write(14,fmt) int(timeM%x),                                 &
+                                 lim,                                  &
+                            thetaM%x,                                  &
+                             saltM%x,                                  &
+                              dicM%x,                                  &
+                              alkM%x,                                  &
+                              po4M%x,                                  &
+                              no3M%x,                                  &
+                              fetM%x,                                  &
+                               ltM%x,                                  &
+                          -exportM%x,                                  &
+                            pstarM%x,                                  &
+                             pco2M%x,                                  &
+                             pco2A%x
+
+! Write sensitivities to file
+           do idv = 1, ndv
+               write(15,fmt)  int(timeM%x),                            &
+                                  int(idv),                            &
+                            thetaM%dx(idv),                            &
+                             saltM%dx(idv),                            &
+                              dicM%dx(idv),                            &
+                              alkM%dx(idv),                            &
+                              po4M%dx(idv),                            &
+                              no3M%dx(idv),                            &
+                              fetM%dx(idv),                            &
+                               ltM%dx(idv),                            &
+                           exportM%dx(idv),                            &
+                            pstarM%dx(idv),                            &
+                             pco2M%dx(idv),                            &
+                             pco2A%dx(idv)
+           enddo
+#else
 ! Write model state to file                             
            write(14,fmt) int(timeM),                                   & 
                                lim,                                    & 
@@ -470,7 +688,42 @@ IMPLICIT NONE
                              pco2M,                                    &
                              pco2A
 #endif
+#endif
        
+#if defined(USEDUALNUMAD)
+! output to array
+       thout     (outstep,1:nbox) = thetaM%x
+       sout      (outstep,1:nbox) = saltM%x
+       cout      (outstep,1:nbox) = dicM%x
+       aout      (outstep,1:nbox) = alkM%x
+       pout      (outstep,1:nbox) = po4M%x
+       nout      (outstep,1:nbox) = no3M%x
+       fout      (outstep,1:nbox) = fetM%x
+       lout      (outstep,1:nbox) = ltM%x
+       expout    (outstep,1:nbox) =-exportM%x
+       ocpco2out (outstep,1:nbox) = pco2M%x
+       tout      (outstep) = timeM%x
+       nlout     (outstep) = lim
+       psout     (outstep) = pstarM%x
+       atpco2out (outstep) = pco2A%x
+
+! output to array
+       do idv = 1, ndv
+           thdxout     (outstep,idv,1:nbox) = theta%dx(idv)
+           sdxout      (outstep,idv,1:nbox) = salt%dx (idv)
+           cdxout      (outstep,idv,1:nbox) = dicM%dx (idv)
+           adxout      (outstep,idv,1:nbox) = alkM%dx (idv)
+           pdxout      (outstep,idv,1:nbox) = po4M%dx (idv)
+           ndxout      (outstep,idv,1:nbox) = no3M%dx (idv)
+           fdxout      (outstep,idv,1:nbox) = fetM%dx (idv)
+           ldxout      (outstep,idv,1:nbox) = ltM%dx  (idv)
+           expdxout    (outstep,idv,1:nbox) =-exportM%dx(idv)
+           ocpco2dxout (outstep,idv,1:nbox) = pco2M%dx(idv)
+           tdxout      (outstep,idv) = timeM%dx       (idv)
+           psdxout     (outstep,idv) = pstarM%dx      (idv)
+           atpco2dxout (outstep,idv) = pco2A%dx       (idv)
+       end do
+#else
 ! output to array
        thout     (outstep,1:nbox) = theta
        sout      (outstep,1:nbox) = salt
@@ -486,6 +739,7 @@ IMPLICIT NONE
        nlout     (outstep) = lim
        psout     (outstep) = pstarM
        atpco2out (outstep) = pco2A
+#endif
 
 ! Reset the average accumulators
        timeM  = 0._wp
@@ -516,6 +770,38 @@ IMPLICIT NONE
 #endif
        RETURN
        END SUBROUTINE MODEL
+!=======================================================================
+
+!=======================================================================
+! evaluate rates of change due to transport
+FUNCTION TRANSPORT(conc, pmask, psi, kmask, kappa, invol)
+
+USE MOD_BOXES
+IMPLICIT NONE
+REAL(KIND=wp), DIMENSION(nbox)                  :: TRANSPORT
+REAL(KIND=wp), intent(in), DIMENSION(nbox)      :: conc, invol
+REAL(KIND=wp), intent(in), DIMENSION(nbox,nbox) :: pmask, kmask
+REAL(KIND=wp), intent(in)                       :: psi, kappa
+!
+REAL(KIND=wp), DIMENSION(nbox,nbox) :: dconc
+#if defined(USEDUALNUMAD)
+INTEGER                             :: i
+#endif
+
+dconc = spread(conc,1,nbox) - transpose(spread(conc,1,nbox))
+
+#if defined(USEDUALNUMAD)
+! DNAD has trouble with sum matrices, but it works on arrays
+       DO i=1,nbox
+           TRANSPORT(i) = invol(i) * sum(                              &
+                               ( psi*pmask(i,:) + kappa*kmask(i,:) )   &
+                               * dconc(i,:) )
+       ENDDO
+#else
+       TRANSPORT = invol * sum( ( psi*pmask + kappa*kmask ) * dconc, 2 )
+#endif
+       RETURN
+       END FUNCTION TRANSPORT
 !=======================================================================
 
 !=======================================================================
@@ -551,14 +837,19 @@ IMPLICIT NONE
        REAL(KIND=wp), PARAMETER :: mininso= 0.00001_wp   
 
 ! find day (****NOTE for year starting in winter*****)
+#if defined(USEDUALNUMAD)
+! Mod not written for dual, need to explicit
+       dayfrac=mod(boxtime%x,speryr)/(speryr) !fraction of year
+#else
        dayfrac=mod(boxtime  ,speryr)/(speryr) !fraction of year
-       yday = two*pi*dayfrac                 !convert to radians
-       delta = (0.006918_wp                                           &
-           -(0.399912_wp*cos(yday))                                   &
-           +(0.070257_wp*sin(yday))                                   &
-           -(0.006758_wp*cos(two*yday))                               &
-           +(0.000907_wp*sin(two*yday))                               &
-           -(0.002697_wp*cos(three*yday))                             &
+#endif
+yday = two*pi*dayfrac                 !convert to radians
+       delta = (0.006918_wp                                            &
+           -(0.399912_wp*cos(yday))                                    &
+           +(0.070257_wp*sin(yday))                                    &
+           -(0.006758_wp*cos(two*yday))                                &
+           +(0.000907_wp*sin(two*yday))                                &
+           -(0.002697_wp*cos(three*yday))                              &
            +(0.001480_wp*sin(three*yday)))                                   
 
 ! latitude in radians
@@ -608,6 +899,18 @@ IMPLICIT NONE
        REAL(KIND=wp), intent(in) , DIMENSION(nbox):: ilimit 
        REAL(KIND=wp), intent(in)                  :: alpha
 
+#if defined(USEDUALNUMAD)
+! Local variables
+       INTEGER                             :: i
+       REAL(KIND=wp), DIMENSION(nbox,nbox) :: leibig
+! Stack the nutrient uptake rates and find the smallest that limits production
+       leibig = RESHAPE([ plimit, nlimit, flimit ],[ nbox, 3 ])
+
+! DNAD has trouble with minval matrices, but it works on arrays
+       DO i=1,nbox
+           CALC_PRODUCTION(i) = alpha * ilimit(i) * minval(leibig(i,:))
+       ENDDO
+#else
 ! Non-linear model can use array operations
 ! minval accepts an array of values and then finds the minimum along dim arguement
 !   need to reshape the concatenated nutrient arrays here to stack them by box
@@ -615,7 +918,8 @@ IMPLICIT NONE
        CALC_PRODUCTION = alpha * ilimit * minval(                      &
                       RESHAPE([ plimit, nlimit, flimit ],[ nbox, 3 ])  &
                                                  ,2)
-       RETURN
+#endif
+RETURN
        END FUNCTION CALC_PRODUCTION
 !=======================================================================
 
@@ -634,6 +938,13 @@ IMPLICIT NONE
 
 ! scale rate of nutrient export with rate of phosphorus export
 ! R matrix determines export flux and remineralization locations
+#if defined(USEDUALNUMAD)
+! DNAD has trouble with sum matrices, but it works on arrays
+       INTEGER :: i
+       DO i=1,nbox
+           CALC_EXPORT(i) = sum( R(i,:) * bioP * vol) * invol(i)
+       ENDDO
+#else
 ! Spread broadcasts export and volume arrays to matrices
 ! Each is volume weighted (technically for a single box, this is not necessary,
 !    but it works for accumulation of several boxes too.)
@@ -642,6 +953,7 @@ IMPLICIT NONE
                             * SPREAD(vol ,1,nbox)                      &
                           ,2)                                          &
                       * invol
+#endif
        RETURN
        END FUNCTION CALC_EXPORT
 !=======================================================================
@@ -708,7 +1020,13 @@ IMPLICIT NONE
 !  4 = light
        leibig = RESHAPE([ plimit,nlimit,flimit,ilimit ],[ nbox, 4 ])
 
+#if defined(USEDUALNUMAD)
+       do i = 1,nbox
+           lim(i)=minloc(leibig(i,:)%x, dim=1)
+       end do
+#else
        lim=minloc(leibig,2)
+#endif
 
 !      write out array integers and concatenate as a string       
        write(clim,'(I0)') lim(1)

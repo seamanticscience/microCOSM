@@ -473,7 +473,7 @@ REAL(KIND=wp) :: zlog10_kc1_p0, zln_kc1_pp
 zlog10_kc1_p0 =   61.2172_wp                                                   &
                 - 3633.86_wp/t_k                                               &
                 - 9.67770_wp*LOG(t_k)                                          &
-                + s*(0.011555 - s*0.0001152_wp)
+                + s*(0.011555_wp - s*0.0001152_wp)
 
 
 ! Pressure correction
@@ -632,9 +632,9 @@ zsqrts     = SQRT(s)
 zcvt_to_kgsw    = ACVT_KGH2O_O_KGSW(s)
 
 zln_kc1_p0 =   -2307.1255_wp/t_k + 2.83655_wp - 1.5529413_wp*LOG(t_k)        &
-             + (-4.0484_wp/t_k - 0.20760841)*zsqrts                          &
-             + 0.08468345*s                                                  &
-             - 0.00654208*zsqrts*s
+             + (-4.0484_wp/t_k - 0.20760841_wp)*zsqrts                          &
+             + 0.08468345_wp*s                                                  &
+             - 0.00654208_wp*zsqrts*s
 
 
 ! Pressure correction
@@ -715,7 +715,7 @@ zcvt_to_kgsw    = ACVT_KGH2O_O_KGSW(s)
 
 zln_kc2_p0 =   -3351.6106_wp/t_k - 9.226508_wp - 0.2005743_wp*LOG(t_k)         &
              + ( -23.9722_wp/t_k - 0.106901773_wp)*zsqrts                      &
-             + 0.1130822*s - 0.00846934_wp*zsqrts*s
+             + 0.1130822_wp*s - 0.00846934_wp*zsqrts*s
 
 
 ! Pressure correction
@@ -954,7 +954,7 @@ zln_kp1_p0 =      115.54_wp - 4576.752_wp/t_k - 18.453_wp*LOG(t_k)     &
 zt_degc   = t_k - t_k_zerodegc
 zrt       = gasconst_bar_cm3_o_mol_k * t_k
 
-zdvi      =  -14.51_wp + 0.1211_wp*zt_degc - 0.321E-03*zt_degc*zt_degc
+zdvi      =  -14.51_wp + 0.1211_wp*zt_degc - 0.321E-03_wp*zt_degc*zt_degc
 zdki      = ( -2.67_wp + 0.0427_wp*zt_degc)*1.0E-03_wp
 
 zln_kp1_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
@@ -1100,7 +1100,7 @@ zln_kp3_p0 =     -18.126_wp  -  3070.75_wp/t_k                        &
 zt_degc   = t_k - t_k_zerodegc
 zrt       = gasconst_bar_cm3_o_mol_k * t_k
 
-zdvi      =  -26.57_wp + 0.2020_wp*zt_degc -3.042E-03*zt_degc*zt_degc
+zdvi      =  -26.57_wp + 0.2020_wp*zt_degc -3.042E-03_wp*zt_degc*zt_degc
 zdki      = ( -4.08_wp + 0.0714_wp*zt_degc)*1.0E-03_wp
 
 zln_kp3_pp = (-zdvi + zdki*p_bar/two)*p_bar/zrt
@@ -1700,7 +1700,7 @@ zsqrts    = SQRT(s)
 zlog10_kspcalc_p0 = &
              -171.9065_wp - 0.077993_wp*t_k                           &
             + 2839.319_wp/t_k + 71.595_wp*LOG10(t_k)                  &
-            + ( -0.77712_wp + 0.0028426*t_k + 178.34_wp/t_k)*zsqrts   &
+            + ( -0.77712_wp + 0.0028426_wp*t_k + 178.34_wp/t_k)*zsqrts   &
             - 0.07711_wp*s + 0.0041249_wp*s*zsqrts
 
 

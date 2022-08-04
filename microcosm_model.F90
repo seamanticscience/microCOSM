@@ -36,33 +36,35 @@
             maxyears,                                                  &
             outputyears,                                               &
             gaovla_opt,                                                &
-            gamma_Fe,                                                  &
-            lt_lifetime,                                               &
+            gamma_in,                                                  &
+            lt_lifein,                                                 &
             alpha_yr,                                                  &
-            psi,                                                       &
-            atpco2in 
+            atpco2in,                                                  &
+            psi_in,                                                    &
+            dif_in
 
 ! Input arrays (nbox dimensions)
        REAL(KIND=wp), dimension (nbox) ::                              & 
             dx,                                                        &
             dy,                                                        &
             dz,                                                        &
-            thin,                                                       & 
-            sain,                                                       &
-            cain,                                                       & 
-            alin,                                                       & 
-            phin,                                                       & 
-            niin,                                                       & 
-            fein,                                                       & 
-            liin,                                                       & 
+            thin,                                                      & 
+            sain,                                                      &
+            cain,                                                      & 
+            alin,                                                      & 
+            phin,                                                      & 
+            niin,                                                      & 
+            fein,                                                      & 
+            liin,                                                      & 
             fe_input,                                                  &
-            dlambdadz,                                                 &
-            wind,                                                      &
-            fopen
+            dldz_in,                                                   &
+            wind_in,                                                   &
+            fopen_in
 
        REAL(KIND=wp), dimension (nbox, nbox) ::                        & 
-            K,                                                         &
-            R
+            Kin,                                                       &
+            Rin,                                                       &
+            Pin
             
 ! Output arrays (nbox, by timestep dimensions)
        REAL(KIND=wp), dimension (:,:), allocatable ::                  &
@@ -82,6 +84,24 @@
             psout,                                                     &
             atpco2out
 
+#if defined(USEDUALNUMAD)
+       REAL(KIND=wp), dimension (:,:,:), allocatable ::                &
+            thdxout,                                                   &
+            sdxout,                                                    &
+            cdxout,                                                    &
+            adxout,                                                    &
+            pdxout,                                                    &
+            ndxout,                                                    &
+            fdxout,                                                    &
+            ldxout,                                                    &
+            expdxout,                                                  &
+            pco2dxout
+
+       REAL(KIND=wp), dimension (:,:), allocatable   ::                &
+            tdxout,                                                    &
+            psdxout,                                                   &
+            atpco2dxout
+#endif
        INTEGER, dimension (:), allocatable   ::                        &
             nlout
        
@@ -106,17 +126,44 @@
        allocate ( expout    (outstepmax,nbox) )
        allocate ( pco2out   (outstepmax,nbox) )
 
+#if defined(USEDUALNUMAD)
+       ! allocate memory
+       allocate ( tdxout      (outstepmax,ndv) )
+       allocate ( psdxout     (outstepmax,ndv) )
+       allocate ( atpco2dxout (outstepmax,ndv) )
+       allocate ( thdxout     (outstepmax,nbox,ndv) )
+       allocate ( sdxout      (outstepmax,nbox,ndv) )
+       allocate ( cdxout      (outstepmax,nbox,ndv) )
+       allocate ( adxout      (outstepmax,nbox,ndv) )
+       allocate ( pdxout      (outstepmax,nbox,ndv) )
+       allocate ( ndxout      (outstepmax,nbox,ndv) )
+       allocate ( fdxout      (outstepmax,nbox,ndv) )
+       allocate ( ldxout      (outstepmax,nbox,ndv) )
+       allocate ( expdxout    (outstepmax,nbox,ndv) )
+       allocate ( pco2dxout   (outstepmax,nbox,ndv) )
+#endif
+
        ! Geometry and array inputs
        dx   = [ 17.0e6_wp, 17.0e6_wp,   17.0e6_wp ]
        dy   = [  4.0e6_wp, 12.0e6_wp,   16.0e6_wp ]  
        dz   = [ 50.0_wp  , 50.0_wp  , 5050.0_wp   ]
-
-       ! define array of mixing rates
-       K = RESHAPE( [  0.e6_wp, 1.e6_wp, 1.e6_wp,                       &
-                       1.e6_wp, 0.e6_wp, 1.e6_wp,                       &
-                       1.e6_wp, 1.e6_wp, 0.e6_wp ],                     &
-                       [ nbox, nbox ] )
        
+       ! Overturning and mixing rates (m3/s)
+       psi_in = 20.e6_wp
+       dif_in =  1.e6_wp
+
+       ! mixing mask array
+       Kin = RESHAPE( [ 0._wp, 1._wp, 1._wp,                           &
+                        1._wp, 0._wp, 1._wp,                           &
+                        1._wp, 1._wp, 0._wp ],                         &
+                      [ nbox, nbox ] )
+
+       ! Overturning mask array
+       Pin = RESHAPE([ 0._wp, 1._wp, 0._wp,                            &
+                       0._wp, 0._wp, 1._wp,                            &
+                       1._wp, 0._wp, 0._wp ],                          &
+                        [ nbox, nbox ] )
+
        ! define array of remineralization coefficients (Columnwise)
        ! -1 indicates all of export is lost from cell, while 
        ! +1 indicates all of export is remineralized (gained) by cell
@@ -126,11 +173,11 @@
        ! indicates the first box (column one) loses export from box 1,
        !           the second box (col two) loses export from box 2,
        !       and the third box (col three) gains export from boxes 1 and 2 
-       R = RESHAPE([ -1._wp, 0._wp, 1._wp,                              &
-                      0._wp,-1._wp, 1._wp,                              &
-                      0._wp, 0._wp, 0._wp ],                            &
+       Rin = RESHAPE([ -1._wp, 0._wp, 1._wp,                           &
+                        0._wp,-1._wp, 1._wp,                           &
+                        0._wp, 0._wp, 0._wp ],                         &
                       [ nbox, nbox ] )
-                    
+
        ! Initialize input arguements, and set some reasonable values
        thin     =      0._wp
        sain     =     34._wp
@@ -145,10 +192,10 @@
        sain(1:3)= [   34._wp,   35.50_wp,   34.75_wp ]
        ! Initial concentrations in (u/n)mol/kg
        ! Make sure to compile with -DFIXATMPCO2 first
-       cain(1:3)= [ 2100._wp, 2100._wp  , 2350._wp   ]
-       alin(1:3)= [ 2300._wp, 2300._wp  , 2400._wp   ]
+       cain(1:3)= [ 2200._wp, 2100._wp  , 2400._wp   ]
+       alin(1:3)= [ 2350._wp, 2350._wp  , 2400._wp   ]
        phin(1:3)= [    2._wp,    0._wp  ,    2.5_wp  ]
-       niin(1:3)= [   32._wp,    0._wp  ,   36._wp   ]
+       niin(1:3)= [   25._wp,    0._wp  ,   35._wp   ]
 
        atpco2in =    280._wp
 
@@ -175,22 +222,30 @@
        !l3in   =    1.62589_wp
        !atpco2in= 280.00000_wp
 
+       cain(1:3)= [ 2263.27105_wp, 2104.02729_wp, 2358.11830_wp ]
+       alin(1:3)= [ 2396.24755_wp, 2388.24068_wp, 2399.60156_wp ]
+       phin(1:3)= [ 1.85304_wp   , 0.31325_wp   , 2.49804_wp    ]
+       niin(1:3)= [ 24.68043_wp  , 0.04392_wp   , 35.00046_wp   ]
+       fein(1:3)= [ 0.01007_wp   , 0.37382_wp   , 0.55782_wp    ]
+       liin(1:3)= [ 1.62217_wp   , 1.58451_wp   , 1.57992_wp    ]
+       atpco2in = 280.00000_wp
+
        ! Input some example parameters
        ! Wind speed (m/s)for CO2 gas fluxes
-       wind         =    0._wp
-       wind(1:3)    = [ 10._wp, 5._wp, 0._wp ]
+       wind_in      =    0._wp
+       wind_in(1:3) = [ 10._wp, 5._wp, 0._wp ]
        
        ! Open surface fraction in contact with atmoshpere 
        !  1 => fully open, <1 => flux impeded (e.g. by sea ice)
-       fopen        =   0._wp 
-       fopen(1:3)   = [ 1._wp, 1._wp, 0._wp ]
+       fopen_in     =   0._wp
+       fopen_in(1:3)= [ 1._wp, 1._wp, 0._wp ]
        
        ! Gamma over lambda for ligands "optimum" value (Lauderdale et al 2020)
        gaovla_opt   = 4398._wp
        ! Gamma ligand production rate (in phosphate, not carbon, units)
-       gamma_Fe     =   5.e-5_wp*106._wp
+       gamma_in     = 5.e-5_wp*106._wp
        ! Lambda ligand lifetime (s)
-       lt_lifetime  =   1._wp/((gamma_Fe/106._wp)/gaovla_opt)
+       lt_lifein    = 1._wp/((gamma_in/106._wp)/gaovla_opt)
        ! Dust deposition in g Fe m-2 year-1
        fe_input     =   0._wp
        fe_input(1:3)= [ 1.5e-3_wp, 1.5e-1_wp,                          &
@@ -203,22 +258,21 @@
        alpha_yr      = 6.e-6_wp
        ! Deep ocean box lifetime modifier to capture the gradient due to
        ! photodegradation near the surface and slower loss in the deep
-       dlambdadz     =   1._wp
-       dlambdadz(1:3)= [ 1._wp, 1._wp, 1.e-2_wp ]
-       ! Overturning rate (m3/s)
-       psi           = 20.0e6_wp
+       dldz_in       =   1._wp
+       dldz_in(1:3)  = [ 1._wp, 1._wp, 1.e-2_wp ]
+
        ! File number identifier
        id            = 1
             
        call model(id, maxyears, outputyears, outstepmax,               &
             dx, dy, dz,                                                &
-            K, R,                                                      &
-            psi, alpha_yr,                                             &
-            gamma_Fe, lt_lifetime,                                     &
-            dlambdadz,                                                 &
+            Kin, Rin, Pin,                                             &
+            psi_in, dif_in,                                            &
+            alpha_yr, gamma_in, lt_lifein,                             &
+            dldz_in,                                                   &
             fe_input,                                                  &
-            wind,                                                      &
-            fopen,                                                     &
+            wind_in,                                                   &
+            fopen_in,                                                  &
             thin,                                                      &
             sain,                                                      &
             cain,                                                      &
@@ -241,7 +295,22 @@
             nlout,                                                     &
             psout,                                                     &
             pco2out,                                                   &
-            atpco2out                                                  &           
+            atpco2out                                                  &
+#if defined(USEDUALNUMAD)
+            ,tdxout,                                                   &
+            thdxout,                                                   &
+            sdxout,                                                    &
+            cdxout,                                                    &
+            adxout,                                                    &
+            pdxout,                                                    &
+            ndxout,                                                    &
+            fdxout,                                                    &
+            ldxout,                                                    &
+            expdxout,                                                  &
+            psdxout,                                                   &
+            pco2dxout,                                                 &
+            atpco2dxout                                                &
+#endif
             )
 
 !=======================================================================

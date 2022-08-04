@@ -1755,7 +1755,7 @@ DO
    zh_prev = zh
 
    IF(      ( ((zh-zh_low)*zdeqndh-zeqn)*((zh-zh_high)*zdeqndh-zeqn) > zero ) &
-       .OR. ( ABS(2.0*zeqn) > ABS(zh_delta_prev*zdeqndh)) ) THEN
+       .OR. ( ABS(2.0_wp*zeqn) > ABS(zh_delta_prev*zdeqndh)) ) THEN
       
       zh_delta_prev = zh_delta
       zh_delta      = 0.5_wp*(zh_high - zh_low)
