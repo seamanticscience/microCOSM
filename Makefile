@@ -11,10 +11,24 @@ OPTIONDEFS = -DWRITEOUTFILE
 
 DNAD_OBJ = dnad/dnad.o
 
+# If using JSON output, compile with json-fortran library
+ifeq ($(findstring USEJSONOUT,$(OPTIONDEFS)),USEJSONOUT)
+JSON_DYL = -ljsonfortran -lgfortran
+JSON_DIR = /Users/jml1/GitHub/microCOSM/json-fortran/jsonfortran-gnu-8.3.0/lib/
+JSON_LIB = -L$(JSON_DIR)
+JSON_INC = -I$(JSON_DIR)
+FFLAGS += -Wl,-rpath,/opt/local/lib/gcc-devel -Wl,-rpath,$(JSON_DIR)
+else
+JSON_DYL =
+JSON_LIB =
+JSON_INC =
+endif
+
 MODULE_OBJ = mod_precision.o mod_dimensions.o         \
              mod_common.o    mod_chemconst.o          \
              mod_chemspeciation.o mod_phsolvers.o     \
-             mod_carbonchem.o mod_modelmain.o
+             mod_carbonchem.o mod_modelio.o           \
+             mod_modelmain.o
              
 MODEL_OBJ  = microcosm_model.o
 
@@ -22,26 +36,26 @@ MODEL_OBJ  = microcosm_model.o
 ifeq ($(findstring USEDUALNUMAD,$(OPTIONDEFS)),USEDUALNUMAD)
 CPPCMD = cat $< | sed -e "s/REAL(KIND=wp)/TYPE(DUAL)/g" \
                       -e "s/TYPE(DUAL), PARAMETER/REAL(KIND=wp), PARAMETER/g" \
-                | $(FC) $(OPTIONDEFS) -cpp -P -E $(FFLAGS)
+                | $(FC) $(OPTIONDEFS) -cpp -P -E $(FFLAGS) 
 MODULE_OBJ += $(DNAD_OBJ)
 else
 CPPCMD = cat $< | $(FC) $(OPTIONDEFS) -cpp -P -E $(FFLAGS)
 endif
 
 model: $(DNAD_OBJ) $(MODULE_OBJ) $(MODEL_OBJ)
-	$(FC) $(OPTIONDEFS) $(FFLAGS) $(MODULE_OBJ) $(MODEL_OBJ) -o microCOSM 
+	$(FC) $(JSON_LIB) $(JSON_INC) $(OPTIONDEFS) $(FFLAGS) $(MODULE_OBJ) $(MODEL_OBJ) -o microCOSM $(JSON_DYL)
 
 # Requires seperate pre-processing for some reason
-pymodel: $(MODULE_OBJ:.o=.f) $(MODEL_OBJ:.o=.f)
-	$(PC) $(OPTIONDEFS) --opt=$(FFLAGS) --f90flags=-ffree-form -m microCOSM -c $(MODULE_OBJ:.o=.f) $(MODEL_OBJ:.o=.f)
+pymodel: $(DNAD_OBJ) $(MODULE_OBJ:.o=.f)
+	$(PC) $(OPTIONDEFS) --opt=$(FFLAGS) --f90flags=-ffree-form -m microCOSM -c $(MODULE_OBJ:.o=.f)
 
 #%.o: %.F90
 #	$(FC) $(OPTIONDEFS) -c $(FFLAGS) $< -o $@
 	
 %.f: %.F90
-	$(CPPCMD) -o $@ -
+	$(CPPCMD) -o $@ $(JSON_DYL) -
 %.o: %.f
-	$(FC) $(OPTIONDEFS) -c $(FFLAGS) -ffree-form  $< -o $@
+	$(FC) $(JSON_LIB) $(JSON_INC) $(OPTIONDEFS) -c $(FFLAGS) -ffree-form -o $@ $< $(JSON_DYL)
 
 .PHONY : dnadmod
 dnadmod:

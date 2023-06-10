@@ -9,6 +9,7 @@
        USE MOD_DIMENSIONS
        USE MOD_COMMON
        USE MOD_CARBONCHEM
+       USE MOD_MODELIO
 IMPLICIT NONE
 ! --------------------------------------------------------
 ! List of (PRIVATE) routines/functions
@@ -29,6 +30,8 @@ IMPLICIT NONE
             dx,                                                        &
             dy,                                                        &
             dz,                                                        &
+            depth,                                                     &
+            latitude,                                                  &
             Kin,                                                       &
             Rin,                                                       &
             Pin,                                                       &
@@ -96,7 +99,7 @@ IMPLICIT NONE
             atpco2in
 
        REAL(KIND=wp), intent(in), dimension (nbox) ::                  &
-            dx, dy, dz,                                                &
+            dx, dy, dz, depth, latitude,                               &
             thin,                                                      &
             sain,                                                      &
             cain,                                                      &
@@ -130,7 +133,7 @@ IMPLICIT NONE
             psout,                                                     &
             atpco2out
 
-       INTEGER, intent(out), dimension (outstepmax) ::                 &
+       INTEGER(KIND=ip), intent(out), dimension (outstepmax) ::        &
             nlout                                                     
 
 #if defined(USEDUALNUMAD)
@@ -152,17 +155,26 @@ IMPLICIT NONE
             atpco2dxout
 
        REAL(KIND=wp), dimension (ndv,ndv) :: dxvec
+       INTEGER                            :: idv
 #endif
 
 ! local variables
 !       include "comdeck.h"
-       INTEGER       :: nstep, outstep, idv
+       INTEGER       :: nstep, outstep
        REAL(KIND=wp) :: time
-       CHARACTER*64  :: fmt, inifmt, varfmt, frep, filename
+       CHARACTER*64  :: filename_avg
+#if defined(USEDUALNUMAD)
+       CHARACTER*64  :: filename_dnad
+#endif
 !-----------------------------------------------------------------------         
         
        CALL common_assignments()
        
+       write (filename_avg , '(a,I0.6,a)') 'microCOSM_'    ,id,'_output'
+#if defined(USEDUALNUMAD)
+       write (filename_dnad, '(a,I0.6,a)') 'microCOSMDNAD_',id,'_output'
+#endif
+
 ! set some parameters
        nstepmax   = int(maxyears*(speryr/dt))
 ! initialize outstep
@@ -170,8 +182,8 @@ IMPLICIT NONE
 ! initial time
        time = 0._wp
 
-       CALL establish_dimensions(dx,dy,dz,lat,area,vol,invol,          &
-                                          depth,pressure)
+       CALL establish_dimensions(dx,dy,dz,latitude,depth,area,         &
+                                            vol,invol,pressure)
 
 ! Set model variables from input values
        theta = thin
@@ -209,7 +221,7 @@ IMPLICIT NONE
 ! Export production parameters (Parekh et al, 2005):
 ! max export prodution rate: (again, phosphorus units, mol P m-3 s-1)
 !      alpha = 0.5d-6 * conv / (30.0*86400.0) ! Recover with alpha_yr=6e-6
-       alpha = alpha_yr * conv_molkg_molm3 / (speryr) 
+       alpha = alpha_yr * convmolkgmolm3 / (speryr) 
        
 ! Initial export production and nutrient limitation code
        light  = zero
@@ -230,14 +242,7 @@ IMPLICIT NONE
        dlambdadz  = dldz_in
        lt_lifetime= lt_lifein
 
-#if !defined(USEDUALNUMAD)
-!! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
-       if (lt_lifetime.LE.zero) then
-          lambda = zero
-       else
-          lambda = dlambdadz/lt_lifetime
-       endif
-#else
+#if defined(USEDUALNUMAD)
 ! Set the Dual number sensitivities
         dxvec      = 0.0_wp
         dxvec(1,1) = alpha%x
@@ -275,6 +280,13 @@ IMPLICIT NONE
        else
           lambda = dlambdadz/lt_lifetime
        endif
+#else
+!! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
+       if (lt_lifetime.LE.zero) then
+          lambda = zero
+       else
+          lambda = dlambdadz/lt_lifetime
+       endif
 #endif
 
 ! evaluate pstar, consistent with Harvardton Bears SO sensitivity
@@ -291,7 +303,6 @@ IMPLICIT NONE
                         * (area(3)/(5.10082e8_wp * 1.e6_wp))
        pco2atmos    = atpco2in  * uatm2atm
        atmos_carbon = pco2atmos * atmos_moles
-       sitM         = (po4 * rSIP) / umolkg2molm3 
 
 !! Find out initial conditions of the carbon system for given input values
        call carbon_fluxes(theta,                                       &
@@ -324,182 +335,66 @@ IMPLICIT NONE
        pco2M  = pco2ocean / uatm2atm
        pco2A  = pco2atmos / uatm2atm
        
-#if defined(WRITEOUTFILE)    
-! open an output file and write initial values to file
-          write (filename, '(a,I0.6,a)') 'microCOSM',id,'.dat'
-          open(14,file=filename,status='unknown')
-
-! write column header output 
-           write(14,*)'     t(yr)     Limits  ',                       &
-               repeat('  THETA    ',nbox),                             &
-               repeat(' SALT      ',nbox),                             &
-               repeat('DIC        ',nbox),                             &
-               repeat('ALK        ',nbox),                             &
-               repeat('   PO4     ',nbox),                             &
-               repeat('  NO3      ',nbox),                             &
-               repeat('   FET     ',nbox),                             &
-               repeat('   LIG     ',nbox),                             &
-               repeat('   EXPORT  ',nbox),                             &
-               '   P*      ',                                          &
-               repeat(' OCPCO2    ',nbox),                             &
-               ' ATPCO2    '
-
-! Construct fortran format string
-! Output the time and nutrient limitation code
-           inifmt='1x, i10.1, 1x, i10.0,'
-! Each variable then is a space and a 10 position float with 5 decimal places
-           varfmt='1x, f10.5'
-! This is the number of repeats (10 variables of nbox dimensions plus pstar and atmpco2)
-           write(frep ,'(I4)') 10*nbox+2
-! Combine everything together
-!          fmt='('//trim(fmt)//trim(frep)//'('//trim(varfmt)//'))'
-           write(fmt,'(6A)') '(',trim(inifmt),trim(frep),'(',trim(varfmt),'))'
-
+! Do Model Io For Initial Condition
+       call modelio_output(filename_avg ,                              &
 #if defined(USEDUALNUMAD)
-! Write initial conditions to file
-           write(14,fmt) int(timeM%x),                                 &
-                                  lim,                                 &
-                             thetaM%x,                                 &
-                              saltM%x,                                 &
-                               dicM%x,                                 &
-                               alkM%x,                                 &
-                               po4M%x,                                 &
-                               no3M%x,                                 &
-                               fetM%x,                                 &
-                                ltM%x,                                 &
-                            exportM%x,                                 &
-                             pstarM%x,                                 &
-                              pco2M%x,                                 &
-                              pco2A%x
-
-          write (filename, '(a,I0.6,a)') 'microCOSMDNAD',id,'.dat'
-          open(15,file=filename,status='unknown')
-
-! write column header output 
-           write(15,*)'     t(yr)     iDv     ',                       &
-               repeat('  THETA    ',nbox),                             &
-               repeat(' SALT      ',nbox),                             &
-               repeat('DIC        ',nbox),                             &
-               repeat('ALK        ',nbox),                             &
-               repeat('   PO4     ',nbox),                             &
-               repeat('  NO3      ',nbox),                             &
-               repeat('   FET     ',nbox),                             &
-               repeat('   LIG     ',nbox),                             &
-               repeat('   EXPORT  ',nbox),                             &
-               '   P*      ',                                          &
-               repeat(' OCPCO2    ',nbox),                             &
-               ' ATPCO2    '
-
-! Write initial conditions to file
-           do idv = 1, ndv
-               write(15,fmt)  int(timeM%x),                            &
-                                  int(idv),                            &
-                            thetaM%dx(idv),                            &
-                             saltM%dx(idv),                            &
-                              dicM%dx(idv),                            &
-                              alkM%dx(idv),                            &
-                              po4M%dx(idv),                            &
-                              no3M%dx(idv),                            &
-                              fetM%dx(idv),                            &
-                               ltM%dx(idv),                            &
-                           exportM%dx(idv),                            &
-                            pstarM%dx(idv),                            &
-                             pco2M%dx(idv),                            &
-                             pco2A%dx(idv)
-           enddo
-#else
-! Write initial conditions to file
-           write(14,fmt) int(timeM),                                   & 
-                                lim,                                   & 
-                             thetaM,                                   & 
-                              saltM,                                   &
-                               dicM,                                   & 
-                               alkM,                                   &
-                               po4M,                                   &
-                               no3M,                                   &
-                               fetM,                                   &
-                                ltM,                                   &
-                            exportM,                                   &
-                             pstarM,                                   &
-                              pco2M,                                   &
-                              pco2A
+                           filename_dnad,                              &                                 
 #endif
-#endif
-
-#if defined(USEDUALNUMAD)
-! output to array
-       thout     (outstep,1:nbox) = thetaM%x
-       sout      (outstep,1:nbox) = saltM%x
-       cout      (outstep,1:nbox) = dicM%x
-       aout      (outstep,1:nbox) = alkM%x
-       pout      (outstep,1:nbox) = po4M%x
-       nout      (outstep,1:nbox) = no3M%x
-       fout      (outstep,1:nbox) = fetM%x
-       lout      (outstep,1:nbox) = ltM%x
-       expout    (outstep,1:nbox) = exportM%x
-       ocpco2out (outstep,1:nbox) = pco2M%x
-       tout      (outstep) = timeM%x
-       nlout     (outstep) = lim
-       psout     (outstep) = pstarM%x
-       atpco2out (outstep) = pco2A%x
-
-! output to array
-       do idv = 1, ndv
-           thdxout     (outstep,idv,1:nbox) = theta%dx(idv)
-           sdxout      (outstep,idv,1:nbox) = salt%dx (idv)
-           cdxout      (outstep,idv,1:nbox) = dicM%dx (idv)
-           adxout      (outstep,idv,1:nbox) = alkM%dx (idv)
-           pdxout      (outstep,idv,1:nbox) = po4M%dx (idv)
-           ndxout      (outstep,idv,1:nbox) = no3M%dx (idv)
-           fdxout      (outstep,idv,1:nbox) = fetM%dx (idv)
-           ldxout      (outstep,idv,1:nbox) = ltM%dx  (idv)
-           expdxout    (outstep,idv,1:nbox) = exportM%dx(idv)
-           ocpco2dxout (outstep,idv,1:nbox) = pco2M%dx(idv)
-           tdxout      (outstep,idv) = timeM%dx       (idv)
-           psdxout     (outstep,idv) = pstarM%dx      (idv)
-           atpco2dxout (outstep,idv) = pco2A%dx       (idv)
-       end do
-#else
-! output to array
-       thout     (outstep,1:nbox) = thetaM
-       sout      (outstep,1:nbox) = saltM
-       cout      (outstep,1:nbox) = dicM
-       aout      (outstep,1:nbox) = alkM
-       pout      (outstep,1:nbox) = po4M
-       nout      (outstep,1:nbox) = no3M
-       fout      (outstep,1:nbox) = fetM
-       lout      (outstep,1:nbox) = ltM
-       expout    (outstep,1:nbox) = exportM
-       ocpco2out (outstep,1:nbox) = pco2M
-       tout      (outstep) = timeM
-       nlout     (outstep) = lim
-       psout     (outstep) = pstarM
-       atpco2out (outstep) = pco2A
-#endif
-! Increment outstep
-       outstep=outstep+1
+                                 outstep,                              &   
+                              outstepmax,                              &   
+                                   timeM,                              & 
+                                     lim,                              & 
+                                  thetaM,                              & 
+                                   saltM,                              &
+                                    dicM,                              & 
+                                    alkM,                              &
+                                    po4M,                              &
+                                    no3M,                              &
+                                    fetM,                              &
+                                     ltM,                              &
+                                 exportM,                              &
+                                  pstarM,                              &
+                                   pco2M,                              &
+                                   pco2A,                              &
+                                   thout,                              &
+                                    sout,                              &
+                                    cout,                              &
+                                    aout,                              &
+                                    pout,                              &
+                                    nout,                              &
+                                    fout,                              &
+                                    lout,                              &
+                                  expout,                              &
+                               ocpco2out,                              &
+                                    tout,                              &
+                                   nlout,                              &
+                                   psout,                              &
+                               atpco2out                               &
+#if defined(USEDUALNUMAD)                         
+                               , thdxout,                              &
+                                  sdxout,                              &
+                                  cdxout,                              &
+                                  adxout,                              &
+                                  pdxout,                              &
+                                  ndxout,                              &
+                                  fdxout,                              &
+                                  ldxout,                              &
+                                expdxout,                              &
+                             ocpco2dxout,                              &
+                                  tdxout,                              &
+                                 psdxout,                              &
+                             atpco2dxout                               &
+#endif                       
+                                 ) 
 
 ! timestepping .........................................
        do 200 nstep = 1,nstepmax
-!         write(6,*) "timestep ="
-!         write(6,*) nstep
-! evaluate rates of change due to transport
-!         dthetadt = transport(nbox, theta, K, psi, invol) 
-!         dsaltdt  = transport(nbox, salt,  K, psi, invol) 
-         ddicdt = TRANSPORT(dic, P, psi, K, dif, invol)
-         dalkdt = TRANSPORT(alk, P, psi, K, dif, invol)
-         dpo4dt = TRANSPORT(po4, P, psi, K, dif, invol)
-         dno3dt = TRANSPORT(no3, P, psi, K, dif, invol)
-         dfetdt = TRANSPORT(fet, P, psi, K, dif, invol)
-         dltdt  = TRANSPORT(lt,  P, psi, K, dif, invol)
-
+! Calculate surface air-sea gas exchange of CO2      
+! Diagnostically update silicate concentration linked to phosphate
          time=nstep*dt / (speryr) 
 
-! evaluate biogeochemical rates of change
-! Surface boxes...
-         netco2flux = zero
-                  
-! Calculate surface air-sea gas exchange of CO2      
+         sit = po4 * rSIP
+         
          call carbon_fluxes(theta,                                     &
                              salt,                                     &
                               dic,                                     &
@@ -514,33 +409,50 @@ IMPLICIT NONE
                         pco2ocean,                                     &
                           fluxCO2) 
 
-         netco2flux = netco2flux + sum(fluxCO2 * area)
-         
-! Make sure subsurface boxes are masked by fopen = 0         
+         netco2flux = sum(fluxCO2 * area)
+
+#ifndef FIXATMPCO2
+! Update atmospheric CO2 (but only if you want to)
+        netco2flux=netco2flux*dt
+        call calc_atmos_pco2(atmos_moles,                              &
+                             atmos_carbon,                             &
+                             netco2flux,                               &
+                             pco2atmos)
+#endif
+
+! evaluate rates of change due to transport
+!         dthetadt = transport(nbox, theta, K, psi, invol) 
+!         dsaltdt  = transport(nbox, salt,  K, psi, invol) 
+         ddicdt = TRANSPORT(dic, P, psi, K, dif, invol)
+         dalkdt = TRANSPORT(alk, P, psi, K, dif, invol)
+         dpo4dt = TRANSPORT(po4, P, psi, K, dif, invol)
+         dno3dt = TRANSPORT(no3, P, psi, K, dif, invol)
+         dfetdt = TRANSPORT(fet, P, psi, K, dif, invol)
+         dltdt  = TRANSPORT(lt , P, psi, K, dif, invol)
+
+! evaluate biogeochemical rates of change
          ddicdt     = ddicdt     + fluxCO2 / dz
 
 ! biological terms
-         light  = INSOL(time * speryr, lat)
-         
-         ilimit = light / (light + klight)
-         plimit = po4   / (po4   +  kpo4 ) 
-         nlimit = no3   / (no3   +  kno3 ) 
-         flimit = fet   / (fet   +   kfe ) 
+         light  = INSOL(time * speryr, latitude) * fopen
+         ilimit = light / (   light + klight   )
+         plimit = po4   / (   po4   + kpo4     )
+         nlimit = no3   / (   no3   + kno3     ) 
+         flimit = fet   / (   fet   + kfe      ) 
 
-! -ve export is uptake by phytoplankton, +ve export is net remineralization
        bioP = CALC_PRODUCTION(nlimit, plimit, flimit, ilimit, alpha)
 
        lim  = NUTRIENT_LIMIT_CODE(plimit, nlimit, flimit, ilimit)
 
 ! scale rate of nutrient export with rate of phosphorus export
-! R matrix determines export flux and remineralization locations
-! Spread broadcasts export and volume arrays to matrices
+! R matrix determines export flux and remineralization locations, -ve export is 
+!  uptake by phytoplankton, +ve export is net remineralization
 ! Each is volume weighted (technically for a single box, this is not necessary,
 !    but it works for accumulation of several boxes too.)
-        export = CALC_EXPORT(R, bioP, vol, invol)
+       export = CALC_EXPORT(R, bioP, vol, invol)
 
 ! carbonate flux depends on rain ratio
-       carb = export * rCP * rCACO3
+       carb   = export * rCP    * rCACO3
        
        dpo4dt = dpo4dt + export  
        dno3dt = dno3dt + export * (rCP/rCN)
@@ -556,31 +468,24 @@ IMPLICIT NONE
 
 ! Dynamic ligand production is based on exudation in the surface layers depending on 
 !   production and release during remineralization in the ocean interior
-       dltdt  = dltdt + (abs(export) * gamma_Fe)  - (lambda * lt) 
-
+       dltdt  = dltdt + (abs(export) * gamma_Fe - lambda * lt) 
+!500  format(1x, e15.8, 1x, e15.8, 1x, e15.8)       
+!       write(6,500) export
 ! input of iron (can include (vent source)/fe_sol)
-       dfetdt = dfetdt + fe_sol * fe_depo / dz 
+       dfetdt = dfetdt + (fe_sol * fe_depo) / dz 
 
 ! scavenging and complexation of iron
 ! evaluate local feprime from fet and lt
 ! determine scavenging rate and add to total tendency
-       feprime=FE_EQUIL(fet, lt, beta)
+       feprime = FE_EQUIL(fet, lt, beta)
 
-       dfetdt = dfetdt - Kscav*feprime 
+       dfetdt  = dfetdt - Kscav*feprime 
 
 ! if FeT > LT, then all excess iron is Fe-prime and precipitates out quickly
 ! Liu and Millero indicate very small "soluble" free iron
-       WHERE (fet > lt ) dfetdt = dfetdt - (one/relaxfe)*(fet - lt) 
-
-#ifndef FIXATMPCO2
-! Update atmospheric CO2 (but only if you want to)
-
-        netco2flux=netco2flux*dt
-        call calc_atmos_pco2(atmos_moles,                              &
-                             atmos_carbon,                             &
-                             netco2flux,                               &
-                             pco2atmos)
-#endif
+       fe_pptmask = 0._wp
+       WHERE (fet > lt ) fe_pptmask = 1._wp 
+       dfetdt = dfetdt - fe_pptmask * ((one/relaxfe)*(fet-lt))
 
 ! Euler forward step concentrations
        theta = theta + dthetadt * dt 
@@ -613,161 +518,102 @@ IMPLICIT NONE
          
        exportM= (exportM+export*vol*molps2gtcyr)
 
-
 ! if an output time, write some output to screen and file
 #if defined(USEDUALNUMAD)
-       if (mod(time%x,outputyears%x) .eq. 0)then
+       if (mod(time%x,outputyears%x).eq.zero) then
+           outstep=int(time%x/outputyears%x)+1
 #else
-       if (mod(time,outputyears) .eq. 0)then
+       if (mod(time,outputyears).eq.zero) then
+           outstep=int(time/outputyears)+1
 #endif
 ! For output, work out what the average is
-         timeM  = timeM  /(outputyears*speryr/dt)
-         thetaM = thetaM /(outputyears*speryr/dt)
-         saltM  = saltM  /(outputyears*speryr/dt)
+           timeM  = timeM  / (outputyears*speryr/dt)
+           thetaM = thetaM / (outputyears*speryr/dt)
+           saltM  = saltM  / (outputyears*speryr/dt)
 
-         dicM   = dicM   /(outputyears*speryr/dt)
-         alkM   = alkM   /(outputyears*speryr/dt)
-         po4M   = po4M   /(outputyears*speryr/dt)
-         no3M   = no3M   /(outputyears*speryr/dt)
-         fetM   = fetM   /(outputyears*speryr/dt)
-         ltM    = ltM    /(outputyears*speryr/dt)
-         pstarM = pstarM /(outputyears*speryr/dt)
-         pco2M  = pco2M  /(outputyears*speryr/dt)
-         pco2A  = pco2A  /(outputyears*speryr/dt)
+           dicM   = dicM   / (outputyears*speryr/dt)
+           alkM   = alkM   / (outputyears*speryr/dt)
+           po4M   = po4M   / (outputyears*speryr/dt)
+           no3M   = no3M   / (outputyears*speryr/dt)
+           fetM   = fetM   / (outputyears*speryr/dt)
+           ltM    = ltM    / (outputyears*speryr/dt)
+           pstarM = pstarM / (outputyears*speryr/dt)
+           pco2M  = pco2M  / (outputyears*speryr/dt)
+           pco2A  = pco2A  / (outputyears*speryr/dt)
          
-         exportM= exportM/(outputyears*speryr/dt)
-#if defined(WRITEOUTFILE)           
+           exportM= exportM/ (outputyears*speryr/dt)
+
+! Do Model Io For Averages
+           call modelio_output(filename_avg ,                          &
 #if defined(USEDUALNUMAD)
-! Write model state to file
-           write(14,fmt) int(timeM%x),                                 &
-                                 lim,                                  &
-                            thetaM%x,                                  &
-                             saltM%x,                                  &
-                              dicM%x,                                  &
-                              alkM%x,                                  &
-                              po4M%x,                                  &
-                              no3M%x,                                  &
-                              fetM%x,                                  &
-                               ltM%x,                                  &
-                          -exportM%x,                                  &
-                            pstarM%x,                                  &
-                             pco2M%x,                                  &
-                             pco2A%x
-
-! Write sensitivities to file
-           do idv = 1, ndv
-               write(15,fmt)  int(timeM%x),                            &
-                                  int(idv),                            &
-                            thetaM%dx(idv),                            &
-                             saltM%dx(idv),                            &
-                              dicM%dx(idv),                            &
-                              alkM%dx(idv),                            &
-                              po4M%dx(idv),                            &
-                              no3M%dx(idv),                            &
-                              fetM%dx(idv),                            &
-                               ltM%dx(idv),                            &
-                           exportM%dx(idv),                            &
-                            pstarM%dx(idv),                            &
-                             pco2M%dx(idv),                            &
-                             pco2A%dx(idv)
-           enddo
-#else
-! Write model state to file                             
-           write(14,fmt) int(timeM),                                   & 
-                               lim,                                    & 
-                            thetaM,                                    & 
-                             saltM,                                    &
-                              dicM,                                    & 
-                              alkM,                                    &
-                              po4M,                                    &
-                              no3M,                                    &
-                              fetM,                                    &
-                               ltM,                                    &
-                          -exportM,                                    &
-                            pstarM,                                    &
-                             pco2M,                                    &
-                             pco2A
+                           filename_dnad,                              &                                 
 #endif
-#endif
-       
-#if defined(USEDUALNUMAD)
-! output to array
-       thout     (outstep,1:nbox) = thetaM%x
-       sout      (outstep,1:nbox) = saltM%x
-       cout      (outstep,1:nbox) = dicM%x
-       aout      (outstep,1:nbox) = alkM%x
-       pout      (outstep,1:nbox) = po4M%x
-       nout      (outstep,1:nbox) = no3M%x
-       fout      (outstep,1:nbox) = fetM%x
-       lout      (outstep,1:nbox) = ltM%x
-       expout    (outstep,1:nbox) =-exportM%x
-       ocpco2out (outstep,1:nbox) = pco2M%x
-       tout      (outstep) = timeM%x
-       nlout     (outstep) = lim
-       psout     (outstep) = pstarM%x
-       atpco2out (outstep) = pco2A%x
-
-! output to array
-       do idv = 1, ndv
-           thdxout     (outstep,idv,1:nbox) = theta%dx(idv)
-           sdxout      (outstep,idv,1:nbox) = salt%dx (idv)
-           cdxout      (outstep,idv,1:nbox) = dicM%dx (idv)
-           adxout      (outstep,idv,1:nbox) = alkM%dx (idv)
-           pdxout      (outstep,idv,1:nbox) = po4M%dx (idv)
-           ndxout      (outstep,idv,1:nbox) = no3M%dx (idv)
-           fdxout      (outstep,idv,1:nbox) = fetM%dx (idv)
-           ldxout      (outstep,idv,1:nbox) = ltM%dx  (idv)
-           expdxout    (outstep,idv,1:nbox) =-exportM%dx(idv)
-           ocpco2dxout (outstep,idv,1:nbox) = pco2M%dx(idv)
-           tdxout      (outstep,idv) = timeM%dx       (idv)
-           psdxout     (outstep,idv) = pstarM%dx      (idv)
-           atpco2dxout (outstep,idv) = pco2A%dx       (idv)
-       end do
-#else
-! output to array
-       thout     (outstep,1:nbox) = theta
-       sout      (outstep,1:nbox) = salt
-       cout      (outstep,1:nbox) = dicM
-       aout      (outstep,1:nbox) = alkM
-       pout      (outstep,1:nbox) = po4M
-       nout      (outstep,1:nbox) = no3M
-       fout      (outstep,1:nbox) = fetM
-       lout      (outstep,1:nbox) = ltM
-       expout    (outstep,1:nbox) =-exportM
-       ocpco2out (outstep,1:nbox) = pco2M
-       tout      (outstep) = timeM
-       nlout     (outstep) = lim
-       psout     (outstep) = pstarM
-       atpco2out (outstep) = pco2A
-#endif
-
+                                 outstep,                              &   
+                              outstepmax,                              &   
+                                   timeM,                              & 
+                                     lim,                              & 
+                                  thetaM,                              & 
+                                   saltM,                              &
+                                    dicM,                              & 
+                                    alkM,                              &
+                                    po4M,                              &
+                                    no3M,                              &
+                                    fetM,                              &
+                                     ltM,                              &
+                                 exportM,                              &
+                                  pstarM,                              &
+                                   pco2M,                              &
+                                   pco2A,                              &
+                                   thout,                              &
+                                    sout,                              &
+                                    cout,                              &
+                                    aout,                              &
+                                    pout,                              &
+                                    nout,                              &
+                                    fout,                              &
+                                    lout,                              &
+                                  expout,                              &
+                               ocpco2out,                              &
+                                    tout,                              &
+                                   nlout,                              &
+                                   psout,                              &
+                               atpco2out                               &
+#if defined(USEDUALNUMAD)                         
+                               , thdxout,                              &
+                                  sdxout,                              &
+                                  cdxout,                              &
+                                  adxout,                              &
+                                  pdxout,                              &
+                                  ndxout,                              &
+                                  fdxout,                              &
+                                  ldxout,                              &
+                                expdxout,                              &
+                             ocpco2dxout,                              &
+                                  tdxout,                              &
+                                 psdxout,                              &
+                             atpco2dxout                               &
+#endif                       
+                                 ) 
 ! Reset the average accumulators
-       timeM  = 0._wp
-       thetaM = 0._wp
-       saltM  = 0._wp
+           timeM  = 0._wp
+           thetaM = 0._wp
+           saltM  = 0._wp
 
-       dicM   = 0._wp
-       alkM   = 0._wp
-       po4M   = 0._wp
-       no3M   = 0._wp
-       fetM   = 0._wp
-       ltM    = 0._wp
-       pstarM = 0._wp
-       pco2M  = 0._wp
-       pco2A  = 0._wp
-         
-       exportM= 0._wp
-
-! Increment outstep
-         outstep=outstep+1
+           dicM   = 0._wp
+           alkM   = 0._wp
+           po4M   = 0._wp
+           no3M   = 0._wp
+           fetM   = 0._wp
+           ltM    = 0._wp
+           pstarM = 0._wp
+           pco2M  = 0._wp
+           pco2A  = 0._wp
+           exportM= 0._wp
        endif
+
 ! end timestepping loop
  200   enddo
 
-#if defined(WRITEOUTFILE)    
-! close the output file
-       close(14)
-#endif
        RETURN
        END SUBROUTINE MODEL
 !=======================================================================
@@ -782,7 +628,6 @@ REAL(KIND=wp), DIMENSION(nbox)                  :: TRANSPORT
 REAL(KIND=wp), intent(in), DIMENSION(nbox)      :: conc, invol
 REAL(KIND=wp), intent(in), DIMENSION(nbox,nbox) :: pmask, kmask
 REAL(KIND=wp), intent(in)                       :: psi, kappa
-!
 REAL(KIND=wp), DIMENSION(nbox,nbox) :: dconc
 #if defined(USEDUALNUMAD)
 INTEGER                             :: i
@@ -805,8 +650,8 @@ dconc = spread(conc,1,nbox) - transpose(spread(conc,1,nbox))
 !=======================================================================
 
 !=======================================================================
-! find light as function of date and latitude
-! based on paltridge and parson
+!find light as function of date and latitude
+!based on paltridge and parson
        FUNCTION INSOL(boxtime,boxlat)
        USE MOD_BOXES
 
@@ -814,7 +659,7 @@ dconc = spread(conc,1,nbox) - transpose(spread(conc,1,nbox))
        REAL(KIND=wp), DIMENSION(nbox) :: INSOL
        REAL(KIND=wp), intent(in), DIMENSION(nbox) :: boxlat
        REAL(KIND=wp), intent(in) :: boxtime
-! Local variables       
+!Local variables       
        REAL(KIND=wp), DIMENSION(nbox) :: dayfrac
        REAL(KIND=wp), DIMENSION(nbox) :: yday
        REAL(KIND=wp), DIMENSION(nbox) :: delta
@@ -833,10 +678,10 @@ dconc = spread(conc,1,nbox) - transpose(spread(conc,1,nbox))
 !planetary albedo
        REAL(KIND=wp), PARAMETER :: albedo = 0.60_wp   
        REAL(KIND=wp), PARAMETER :: minsun =-0.999_wp   
-       REAL(KIND=wp), PARAMETER :: mincosz= 0.005_wp   
-       REAL(KIND=wp), PARAMETER :: mininso= 0.00001_wp   
+       REAL(KIND=wp), PARAMETER :: mincosz= 5.e-3_wp   
+       REAL(KIND=wp), PARAMETER :: mininso= 1.e-5_wp   
 
-! find day (****NOTE for year starting in winter*****)
+!find day (****NOTE for year starting in winter*****)
 #if defined(USEDUALNUMAD)
 ! Mod not written for dual, need to explicit
        dayfrac=mod(boxtime%x,speryr)/(speryr) !fraction of year
@@ -852,7 +697,7 @@ yday = two*pi*dayfrac                 !convert to radians
            -(0.002697_wp*cos(three*yday))                              &
            +(0.001480_wp*sin(three*yday)))                                   
 
-! latitude in radians
+!latitude in radians
        latrad = boxlat*deg2rad
        
        sun    = -sin(delta)/cos(delta) * sin(latrad)/cos(latrad)
@@ -864,7 +709,7 @@ yday = two*pi*dayfrac                 !convert to radians
        end where
 
        dayhrs = abs(acos(sun))
-!      average zenith angle
+!     average zenith angle
        cosz = ( sin(delta)*sin(latrad)+                                &
               ( cos(delta)*cos(latrad)*sin(dayhrs)/dayhrs) )
        
@@ -874,16 +719,15 @@ yday = two*pi*dayfrac                 !convert to radians
        
        frac = dayhrs/pi                       !fraction of daylight in day
 
-! daily average photosynthetically active solar radiation just below surface
+!daily average photosynthetically active solar radiation just below surface
        INSOL = solar*(one-albedo)*cosz*frac*parfrac
 
-       where ( INSOL .LT. mininso )
-           INSOL = mininso
-       end where
-       
+       where ( INSOL .LT. mininso ) INSOL = mininso
+          
        RETURN
        END FUNCTION INSOL
 !=======================================================================
+
 
 !=======================================================================
 ! Calculate surface primary production given macro/micronutrient/light limitation
@@ -902,7 +746,7 @@ yday = two*pi*dayfrac                 !convert to radians
 #if defined(USEDUALNUMAD)
 ! Local variables
        INTEGER                             :: i
-       REAL(KIND=wp), DIMENSION(nbox,nbox) :: leibig
+       REAL(KIND=wp), DIMENSION(nbox, 3)   :: leibig
 ! Stack the nutrient uptake rates and find the smallest that limits production
        leibig = RESHAPE([ plimit, nlimit, flimit ],[ nbox, 3 ])
 
@@ -991,13 +835,12 @@ RETURN
 !=======================================================================
 
 !=======================================================================
-! solve quadratic for iron speciation
-! mick follows, March 2015
+! Produce a code for nutrient limitation in each box
        FUNCTION NUTRIENT_LIMIT_CODE(plimit, nlimit, flimit, ilimit)
        USE MOD_BOXES
 
        IMPLICIT NONE
-       INTEGER :: NUTRIENT_LIMIT_CODE
+       INTEGER(KIND=ip) :: NUTRIENT_LIMIT_CODE
 
        REAL(KIND=wp), intent(in) , DIMENSION(nbox) :: plimit
        REAL(KIND=wp), intent(in) , DIMENSION(nbox) :: nlimit
@@ -1005,9 +848,10 @@ RETURN
        REAL(KIND=wp), intent(in) , DIMENSION(nbox) :: ilimit
        REAL(KIND=wp), DIMENSION(nbox, 4)           :: leibig
 
-       INTEGER,                    DIMENSION(nbox) :: lim
+       INTEGER,       DIMENSION(nbox)              :: lim
        
-       INTEGER           :: i, limout
+       INTEGER           :: i
+       INTEGER(KIND=ip)  :: limout
        CHARACTER(nbox*2) :: clim
        CHARACTER(2)      :: tmp
        

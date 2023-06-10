@@ -4,7 +4,6 @@ MODULE MOD_COMMON
 #if defined(USEDUALNUMAD)
     USE DNADMOD
 #endif
-
 USE MOD_PRECISION
 USE MOD_BOXES
 IMPLICIT NONE
@@ -17,12 +16,12 @@ REAL(KIND=wp), PARAMETER :: dperyr       = 365._wp
 REAL(KIND=wp), PARAMETER :: speryr       = 31536000._wp
 
 ! Conversion factors
-REAL(KIND=wp), PARAMETER :: conv_molkg_molm3 = 1024.5_wp 
-REAL(KIND=wp), PARAMETER :: conv_cmhr_ms     = 1._wp/3.6e5_wp
+REAL(KIND=wp), PARAMETER :: convmolkgmolm3 = 1024.5_wp 
+REAL(KIND=wp), PARAMETER :: convcmhrms     = 1._wp/3.6e5_wp
 
-REAL(KIND=wp), PARAMETER :: permil       = 1._wp/conv_molkg_molm3
-REAL(KIND=wp), PARAMETER :: umolkg2molm3 = conv_molkg_molm3 * 1.e-6_wp 
-REAL(KIND=wp), PARAMETER :: nmolkg2molm3 = conv_molkg_molm3 * 1.e-9_wp 
+REAL(KIND=wp), PARAMETER :: permil       = 1._wp/convmolkgmolm3
+REAL(KIND=wp), PARAMETER :: umolkg2molm3 = convmolkgmolm3 * 1.e-6_wp 
+REAL(KIND=wp), PARAMETER :: nmolkg2molm3 = convmolkgmolm3 * 1.e-9_wp 
 REAL(KIND=wp), PARAMETER :: uatm2atm     = 1.e-6_wp 
 REAL(KIND=wp), PARAMETER :: molps2gtcyr  = 106._wp * 12._wp * speryr * 1.e-15_wp 
 
@@ -66,7 +65,7 @@ REAL(KIND=wp), DIMENSION(nbox) :: wind, fopen
 ! atomic weight of iron = 56
 REAL(KIND=wp)                  :: weight_fe, fe_sol, beta, Kscav, relaxfe  
 ! iron input rate
-REAL(KIND=wp), DIMENSION(nbox) :: fe_depo
+REAL(KIND=wp), DIMENSION(nbox) :: fe_depo, fe_pptmask
 ! Dynamic Ligand variables
 REAL(KIND=wp)                  :: gamma_Fe, lt_lifetime
 REAL(KIND=wp), DIMENSION(nbox) :: dlambdadz, lambda
@@ -77,8 +76,7 @@ REAL(KIND=wp)                  :: kfe, kpo4, kno3, klight
 REAL(KIND=wp), DIMENSION(nbox) :: export
 REAL(KIND=wp)                  :: alpha 
 REAL(KIND=wp), DIMENSION(nbox) :: light, ilimit, plimit, nlimit, flimit
-! nutrient limitation codes
-INTEGER                        :: lim
+INTEGER(kind=ip) lim
 
 CONTAINS
 
@@ -112,21 +110,23 @@ IMPLICIT NONE
    ph   = eight
 
 ! half saturation constants 
-   kfe    = 0.1e-9_wp*conv_molkg_molm3
-   kpo4   = 0.1e-6_wp*conv_molkg_molm3
-   kno3   = 0.1e-6_wp*conv_molkg_molm3*rNP
+   kfe    = 0.1e-9_wp*convmolkgmolm3
+   kpo4   = 0.1e-6_wp*convmolkgmolm3
+   kno3   = 0.1e-6_wp*convmolkgmolm3*rNP
    klight = 30._wp
 
 ! Iron cycle parameters 
    weight_fe = 56._wp  
 !solubility of iron:
-   fe_sol = 0.0025_wp
+   fe_sol = 2.5e-3_wp
 ! conditional stability FeL: (mol kg-1)-1
    beta   = 1.0e9_wp 
 ! Free Fe scavenging rate: (s-1) 
    Kscav  = 1.0e-7_wp    
 ! relaxfe (s) 
    relaxfe = 0.01_wp * speryr  
+! Iron precipitation mask
+   fe_pptmask=0.0_wp
 ! DIC gas exchange piston velocity coefficient
    Kwexch_av = 0.337_wp
 

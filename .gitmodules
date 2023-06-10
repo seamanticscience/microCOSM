@@ -1,3 +1,9 @@
 [submodule "dnad"]
 	path = dnad
 	url = https://github.com/joddlehod/dnad
+[submodule "fson"]
+	path = fson
+	url = https://github.com/josephalevin/fson
+[submodule "json-fortran"]
+	path = json-fortran
+	url = https://github.com/jacobwilliams/json-fortran

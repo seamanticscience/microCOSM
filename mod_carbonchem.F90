@@ -21,8 +21,8 @@
        USE DNADMOD
 #endif
        USE MOD_PRECISION
-       USE MOD_COMMON, ONLY : one, permil, conv_molkg_molm3,           &
-                               conv_cmhr_ms, Kwexch_av
+       USE MOD_COMMON, ONLY : one, permil, convmolkgmolm3,           &
+                               convcmhrms, Kwexch_av
        USE MOD_CHEMCONST
        USE MOD_PHSOLVERS
        USE MOD_CHEMSPECIATION
@@ -261,13 +261,12 @@
 !    Local variables       
       REAL(KIND=wp),   DIMENSION(nbox) :: schmidtDIC, Kwexch
       REAL(KIND=wp),   DIMENSION(nbox) :: co3, hco3, co2aq
-      REAL(KIND=wp) kav, cmhr_ms
       INTEGER                          :: i
       
 ! Initialize
       pco2ocean = 0._wp
       fluxCO2   = 0._wp
-      schmidtDIC    = 0._wp
+      schmidtDIC= 0._wp
       Kwexch    = 0._wp
       co3       = 0._wp
       hco3      = 0._wp
@@ -280,7 +279,7 @@
                  -    0.092307_wp * theta * theta * theta              &
                  +    7.555e-4_wp * theta * theta * theta * theta
 
-      Kwexch =  (Kwexch_av * conv_cmhr_ms * wind*wind * fopen )        &
+      Kwexch =  (Kwexch_av * convcmhrms * fopen * wind*wind )          &
                 / sqrt(schmidtDIC/660._wp)
                
       do i = 1,nbox
@@ -309,7 +308,7 @@
                              * api0_dic )
       end do
 
-      fluxCO2 = fluxCO2 * conv_molkg_molm3
+      fluxCO2 = fluxCO2 * convmolkgmolm3
 RETURN
       END SUBROUTINE CARBON_FLUXES
 !=======================================================================
