@@ -1,7 +1,14 @@
 ! -*- f90 -*-
 MODULE MOD_BOXES
     IMPLICIT NONE
+#if defined(FOURBOX)
+    INTEGER, PARAMETER :: nbox = 4
+#elif defined(FOURTEENBOX)
+    INTEGER, PARAMETER :: nbox = 14
+#else
+! default to three box model
     INTEGER, PARAMETER :: nbox = 3
+#endif        
 END MODULE MOD_BOXES
 
 MODULE MOD_DIMENSIONS
@@ -12,8 +19,8 @@ IMPLICIT NONE
 
 ! geometry
 !REAL(KIND=wp), DIMENSION(nbox)      :: dx, dy, dz, lat
-REAL(KIND=wp), DIMENSION(nbox)      :: lat
-REAL(KIND=wp), DIMENSION(nbox)      :: area, vol, invol, depth, pressure
+!REAL(KIND=wp), DIMENSION(nbox)      :: lat
+REAL(KIND=wp), DIMENSION(nbox)      :: area, vol, invol, pressure
 !REAL(KIND=wp), DIMENSION(nbox,nbox) :: K, R
 
 CONTAINS
@@ -28,33 +35,19 @@ CONTAINS
 
 
 !=======================================================================
-SUBROUTINE ESTABLISH_DIMENSIONS(dx,dy,dz,lat,area,vol,invol,           &
-                                              depth,pressure)
+SUBROUTINE ESTABLISH_DIMENSIONS(dx,dy,dz,lat,depth,area,vol,invol,     &
+                                              pressure)
 USE MOD_BOXES
 IMPLICIT NONE
-REAL(KIND=wp), DIMENSION(nbox),      intent(in)  :: dx, dy, dz
+REAL(KIND=wp), DIMENSION(nbox),      intent(in)  :: dx, dy, dz, lat,   &
+                                                  depth
 
-REAL(KIND=wp), DIMENSION(nbox),      intent(out) ::                    &
-                                                 lat, area, vol, invol,&
-                                                 depth, pressure
-!REAL(KIND=wp), DIMENSION(nbox,nbox), intent(out) :: K, R
-REAL(KIND=wp)                                    :: m2deg
+REAL(KIND=wp), DIMENSION(nbox),      intent(out) ::  area, vol, invol, &
+                                                  pressure
 
-!dx   = [ 17.0e6_wp, 17.0e6_wp, 17.0e6_wp ]
-!dy   = [  4.0e6_wp, 12.0e6_wp, 16.0e6_wp ]  
-!dz   = [ 50.0_wp,   50.0_wp, 5050.0_wp   ]
-
-! depth in m or decibars
-depth = [ 25.0_wp,   25.0_wp, 2575.0_wp ]
 ! applied pressure in bars for carbon system coefficients
 pressure = (depth/10._wp) - 1._wp
 
-m2deg = 180._wp/(dy(1)+dy(2))  
-lat = [  -90._wp+(dy(1)       /2._wp) *m2deg,                          &        
-         -90._wp+(dy(1)+(dy(2)/2._wp))*m2deg,                          &
-         -90._wp+(dy(3)       /2._wp) *m2deg                           &
-       ]
-                                                    
 area     = dx * dy 
 vol      = area * dz 
 invol    = 1._wp / vol  
@@ -107,7 +100,13 @@ REAL(KIND=wp) :: CALC_PSTAR
 
 REAL(KIND=wp), DIMENSION(nbox), intent(in) :: nutrient
 
-CALC_PSTAR = (nutrient(3) - nutrient(1)) / nutrient(3) 
+#if defined(FOURBOX)
+    CALC_PSTAR = (nutrient(4)  - nutrient(1)) / nutrient(4) 
+#elif defined(FOURTEENBOX)
+    CALC_PSTAR = (nutrient(14) - nutrient(2)) / nutrient(14) 
+#else
+    CALC_PSTAR = (nutrient(3)  - nutrient(1)) / nutrient(3) 
+#endif
 
 RETURN
 END FUNCTION CALC_PSTAR
