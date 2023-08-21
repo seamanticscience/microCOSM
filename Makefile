@@ -9,8 +9,15 @@ PC = f2py
 override FFLAGS += -g
 OPTIONDEFS = -DWRITEOUTFILE
 
-# If using JSON output, compile with json-fortran library
+# If using JSON i/o, compile with json-fortran library
+using_json = 
 ifeq ($(findstring USEJSONOUT,$(OPTIONDEFS)),USEJSONOUT)
+    using_json = yes
+endif
+ifeq ($(findstring USEJSONIN,$(OPTIONDEFS)),USEJSONIN)
+    using_json = yes
+endif
+ifdef using_json
 JSON_DYL = -ljsonfortran -lgfortran
 JSON_DIR = /Users/jml1/GitHub/microCOSM/json-fortran/jsonfortran-gnu-8.3.0/lib/
 JSON_LIB = -L$(JSON_DIR)

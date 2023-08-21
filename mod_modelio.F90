@@ -1,6 +1,6 @@
 ! -*- f90 -*-
        MODULE MOD_MODELIO
-#if defined(USEJSONOUT)
+#if defined(USEJSONOUT) || defined(USEJSONIN)
        USE JSON_MODULE
 #endif
        USE MOD_PRECISION
@@ -70,8 +70,7 @@ IMPLICIT NONE
        RETURN
        END SUBROUTINE MODELIO_HEADER
 !=======================================================================       
-
-       SUBROUTINE MODELIO_OUTPUT(                                      &
+ SUBROUTINE MODELIO_OUTPUT(                                      &
                       filename_avg,                                    &
                            outstep,                                    &
                         outstepmax,                                    &
@@ -195,7 +194,7 @@ IMPLICIT NONE
 #if defined(USEJSONOUT)
 ! Only write to JSON file at the end of the run, if requested
        if (mod(outstep,outstepmax).eq.zero) then
-        call MODELIO_FJSON_OUTPUT(                                     &
+        call MODELIO_JSON_OUTPUT(                                     &
                       filename_avg,                                    &
                              thout,                                    &
                               sout,                                    &
@@ -370,7 +369,7 @@ IMPLICIT NONE
        END SUBROUTINE MODELIO_ARRAY_OUTPUT
 !=======================================================================
 
-       SUBROUTINE MODELIO_FJSON_OUTPUT(                                &
+       SUBROUTINE MODELIO_JSON_OUTPUT(                                &
                       filename_avg,                                    &
                            outstep,                                    &
                         outstepmax,                                    &
@@ -480,21 +479,21 @@ IMPLICIT NONE
 
 
 
-#endif ! defined(USEJSONOUT))
+#endif
        RETURN
-       END SUBROUTINE MODELIO_FJSON_OUTPUT
+       END SUBROUTINE MODELIO_JSON_OUTPUT
 !=======================================================================
 
-       SUBROUTINE MODELIO_FJSON_INPUT(                                 &
+    SUBROUTINE MODELIO_JSON_INPUT(                                     &
             filename, id,                                              &
             maxyears, outputyears, outstepmax,                         &
             dx, dy, dz, depth, latitude,                               &
-            K, R, P,                                                   &
-            psi, dif,                                                  &
-            alpha_yr, gamma, lt_life,                                  &
-            dldz, fe_input, wind, fopen,                               &
+            Kin, Rin, Pin,                                             &
+            psi_in, dif_in,                                            &
+            alpha_yr, gamma_in, lt_lifein,                             &
+            dldz_in, fe_input, wind_in, fopen_in,                      &
             thin, sain, cain, alin, phin, niin, fein, liin,            &
-            atpco2                                                     &
+            atpco2in                                                   &
             )
 ! Read input using the json-fortran library
 ! 
@@ -553,18 +552,19 @@ IMPLICIT NONE
 ! > -----------------------------------------------------------------------------------------
        CHARACTER*64, INTENT(IN)          :: filename
 
-       INTEGER, INTENT(OUT) :: outstepmax, id, maxyears, outputyears   
+       INTEGER, INTENT(OUT) :: outstepmax, id  
        
        REAL(KIND=wp), INTENT(OUT) ::                                   &
-            gamma,                                                     &
-            lt_life,                                                   &
+            maxyears,                                                  &
+            outputyears,                                               &
+            gamma_in,                                                  &
+            lt_lifein,                                                 &
             alpha_yr,                                                  &
-            atpco2,                                                    &
-            psi,                                                       &
-            dif
+            atpco2in,                                                  &
+            psi_in,                                                    &
+            dif_in
 
 ! Input arrays (nbox dimensionless)
-!       REAL(KIND=wp), DIMENSION(:), ALLOCATABLE, INTENT(OUT) ::        & 
        REAL(KIND=wp), DIMENSION(nbox), INTENT(OUT) ::                  & 
             dx,                                                        &
             dy,                                                        &
@@ -580,23 +580,22 @@ IMPLICIT NONE
             fein,                                                      & 
             liin,                                                      & 
             fe_input,                                                  &
-            dldz,                                                      &
-            wind,                                                      &
-            fopen
+            dldz_in,                                                   &
+            wind_in,                                                   &
+            fopen_in
 
-!       REAL(KIND=wp), DIMENSION(:,:), ALLOCATABLE, INTENT(OUT) ::      & 
        REAL(KIND=wp), DIMENSION(nbox,nbox), INTENT(OUT) ::             & 
-            K,                                                         &
-            R,                                                         &
-            P
+            Kin,                                                       &
+            Rin,                                                       &
+            Pin
 
-#if defined(USEJSONOUT)
+#if defined(USEJSONIN)
 ! Local variable definitions
        TYPE(json_file)           :: json
        TYPE(json_value), POINTER :: p_matrix, p_child
        TYPE(json_core)           :: core
        LOGICAL                   :: found
-       INTEGER                   :: n_cols, n_rows, var_type
+       INTEGER                   :: i, n_cols, n_rows, var_type
        REAL(KIND=wp)                              :: isca      
        REAL(KIND=wp), DIMENSION(:),   ALLOCATABLE :: ivec
        REAL(KIND=wp), DIMENSION(:,:), ALLOCATABLE :: imat
@@ -607,8 +606,8 @@ IMPLICIT NONE
         
 ! read the file
 !json_data => fson_parse("run_microCOSM_4boxvariablelt_pickup.json")
-       call json%load_file(filename); if (json%failed()) stop
-        
+       call json%load_file(filename); if (json%failed()) stop         &
+            'error: microcosm_pickup.json not found'
 ! extract scalar and vector data from the file
 ! [found can be used to check if the data was really there]
 ! Iteration ID
@@ -624,7 +623,7 @@ IMPLICIT NONE
        if ( .not. found ) then
           stop 1
        else
-          nyrs=isca
+          maxyears=isca
        endif
 
 ! Output frequency
@@ -632,7 +631,7 @@ IMPLICIT NONE
        if ( .not. found ) then
           stop 1
        else
-          tout=isca
+          outputyears=isca
        endif
 
 ! Number of outputs, including initial conditions
@@ -640,7 +639,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          nout=isca
+          outstepmax=isca
        endif
 
 ! Geometry and geography
@@ -690,7 +689,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          psi=isca
+          psi_in=isca
        endif
 
 ! Diffusive mixing strength
@@ -698,7 +697,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          dif=isca
+          dif_in=isca
        endif
 
 ! Biological productivity max rate
@@ -706,7 +705,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          alphabio=isca
+          alpha_yr=isca
        endif
 
 ! Fraction of biological matter that can be ligand
@@ -714,7 +713,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          gamma=isca
+          gamma_in=isca
        endif
 
 ! Ligand degradation timescale
@@ -722,15 +721,17 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          lambda=isca
+          lt_lifein=isca
        endif
 
+!       gaovla_opt = ((gamma_in/106._wp))/lt_lifein
+       
 ! Ligand degradation rate vertical gradient
        call json%get('dlambdadz', ivec, found)
        if ( .not. found ) then 
           stop 1
        else
-          dlambdadz=ivec
+          dldz_in=ivec
        endif
 
 ! Iron input rate
@@ -738,7 +739,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          sourceFe=ivec
+          fe_input=ivec
        endif
 
 ! Wind speed
@@ -746,7 +747,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          wind=ivec
+          wind_in=ivec
        endif
 
 ! Open ocean fraction (ice or subsurface)
@@ -754,7 +755,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          fopen=ivec
+          fopen_in=ivec
        endif
 
 ! Initial concentrations
@@ -763,7 +764,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          theta=ivec
+          thin=ivec
        endif
 
 ! Initial salinities
@@ -771,7 +772,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          salt=ivec
+          sain=ivec
        endif
 
 ! Initial carbon concentrations
@@ -779,7 +780,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          carbon=ivec
+          cain=ivec
        endif
 
 ! Initial alkalinities
@@ -787,7 +788,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          alkalinity=ivec
+          alin=ivec
        endif
 
 ! Initial phosphate concentrations
@@ -795,7 +796,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          phosphate=ivec
+          phin=ivec
        endif
 
 ! Initial nitrate concentrations
@@ -803,7 +804,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          nitrate=ivec
+          niin=ivec
        endif
 
 ! Initial iron concentrations
@@ -811,7 +812,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          iron=ivec
+          fein=ivec
        endif
 
 ! Initial ligand concentrations
@@ -819,7 +820,7 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          ligand=ivec
+          liin=ivec
        endif
 
 ! Initial atmospheric pCO2
@@ -827,12 +828,12 @@ IMPLICIT NONE
        if ( .not. found ) then 
           stop 1
        else
-          atmpco2=isca
+          atpco2in=isca
        endif
       
 ! Read circulation matrix (Wish i could subroutine this, but fails compilation 
-!   with "Error: Found no matching specific binding for the call to the GENERIC
-!   'info'")
+!   with  
+! "Error: Found no matching specific binding for the call to the GENERIC 'info'")
         call json%info('Pcir',found,var_type,n_cols)
         if (.not. found) error stop 'error: Pcir not found'
         
@@ -860,12 +861,12 @@ IMPLICIT NONE
         end do
         nullify(p_matrix)
 
-        P=imat
+        Pin=imat
         deallocate(imat)
 
 !Read Mixing matrix (Wish i could subroutine this, but fails compilation with
-! "Error: Found no matching specific binding for the call to the GENERIC 
-! 'info'")
+! "Error: Found no matching specific binding for the call to the GENERIC 'info'")
+
         call json%info('Kmix',found,var_type,n_cols)
         if (.not. found) error stop 'error: Kmix not found'
         
@@ -893,21 +894,20 @@ IMPLICIT NONE
         end do
         nullify(p_matrix)
 
-        K=imat
+        Kin=imat
         deallocate(imat)
 
 !Read Rrmemin matrix (Wish i could subroutine this, but fails compilation with
-! "Error: Found no matching specific binding for the call to the GENERIC 
-! 'info'")
+! "Error: Found no matching specific binding for the call to the GENERIC 'info'")
         call json%info('Rremin',found,var_type,n_cols)
-        if (.not. found) error stop 'error: Kmix not found'
+        if (.not. found) error stop 'error: Rremin not found'
         
         call json%info('Rremin(1)',found,var_type,n_rows)
-        if (.not. found) error stop 'error: Kmix(1) not found'
+        if (.not. found) error stop 'error: Rremin(1) not found'
         
 !get a pointer to the matrix:
         call json%get('Rremin',p_matrix)
-        if (.not. associated(p_matrix)) error stop 'error: Kmix not found'
+        if (.not. associated(p_matrix)) error stop 'error: Rremin not found'
         
 !size the array:
         allocate(imat(n_rows,n_cols))
@@ -926,118 +926,14 @@ IMPLICIT NONE
         end do
         nullify(p_matrix)
  
-        R=imat
+        Rin=imat
         deallocate(imat)
 
-!! Write out values to check
-!         write(6,*)"niter"
-!         write(6,'(I0)') niter
-!         write(6,*)"nyrs"
-!         write(6,'(I0)') nyrs
-!         write(6,*)"tout"
-!         write(6,'(I0)') tout
-!         write(6,*)"nout"
-!         write(6,'(I0)') nout
-!         
-!         write(6,*)"dx"
-!         do i=1,nbox
-!            write(6,'(f17.4)') dx(i)
-!         end do
-!         write(6,*)"dy"
-!         do i=1,nbox
-!            write(6,'(f17.4)') dy(i)
-!         end do
-!         write(6,*)"dz"
-!         do i=1,nbox
-!            write(6,'(f17.4)') dz(i)
-!         end do
-!         write(6,*)"depth"
-!         do i=1,nbox
-!            write(6,'(f17.4)') depth(i)
-!         end do
-!         write(6,*)"latitude"
-!         do i=1,nbox
-!            write(6,'(f17.4)') latitude(i)
-!         end do
-!         
-!         write(6,*)"psi"
-!         write(6,'(f17.4)') psi
-!         write(6,*)"dif"
-!         write(6,'(f17.4)') dif
-!         write(6,*)"alphabio"
-!         write(6,'(f15.8)') alphabio
-!         write(6,*)"gamma"
-!         write(6,'(f15.8)') gamma
-!         write(6,*)"lambda"
-!         write(6,'(f17.4)') lambda
-!         
-!         write(6,*)"dlambdadz"
-!         do i=1,nbox
-!            write(6,'(f15.8)') dlambdadz(i)
-!         end do
-!         write(6,*)"sourceFe"
-!         do i=1,nbox
-!            write(6,'(f15.8)') sourceFe(i)
-!         end do
-!         write(6,*)"wind"
-!         do i=1,nbox
-!            write(6,'(f15.8)') wind(i)
-!         end do
-!         write(6,*)"fopen"
-!         do i=1,nbox
-!            write(6,'(f15.8)') fopen(i)
-!         end do
-!         
-!         write(6,*)"theta"
-!         do i=1,nbox
-!            write(6,'(f15.8)') theta(i)
-!         end do
-!         write(6,*)"salt"
-!         do i=1,nbox
-!            write(6,'(f15.8)') salt(i)
-!         end do
-!         write(6,*)"carbon"
-!         do i=1,nbox
-!            write(6,'(f15.8)') carbon(i)
-!         end do
-!         write(6,*)"nitrate"
-!         do i=1,nbox
-!            write(6,'(f15.8)') nitrate(i)
-!         end do
-!         write(6,*)"phosphate"
-!         do i=1,nbox
-!            write(6,'(f15.8)') phosphate(i)
-!         end do
-!         write(6,*)"iron"
-!         do i=1,nbox
-!            write(6,'(f15.8)') iron(i)
-!         end do
-!         write(6,*)"ligand"
-!         do i=1,nbox
-!            write(6,'(f15.8)') ligand(i)
-!         end do
-!         
-!         write(6,*)"P matrix"
-!         do i=1,nbox
-!             write(6,400) P(i,:)
-!         end do
-!         write(6,*)"K matrix"
-!         do i=1,nbox
-!             write(6,400) K(i,:)
-!         end do
-!         write(6,*)"R matrix"
-!         do i=1,nbox
-!             write(6,400) R(i,:)
-!         end do
-!         
-!         write(6,*)"atmpco2"
-!         write(6,'(f15.8)') atmpco2
-        
 ! clean up
         call json%destroy()
 #endif
        RETURN
-       END SUBROUTINE MODELIO_FJSON_INPUT     
+       END SUBROUTINE MODELIO_JSON_INPUT     
 !=======================================================================
 
       END MODULE MOD_MODELIO
