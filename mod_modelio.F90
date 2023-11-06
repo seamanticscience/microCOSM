@@ -42,12 +42,16 @@ IMPLICIT NONE
        
        CHARACTER*64, INTENT(IN)  :: filename_avg
        INTEGER                   :: iounit
+      
+#if defined(WRITESTOUTFILE)   
+       CHARACTER*64 :: avg_fname             
+
+       write (avg_fname , '(a,a)') trim(filename_avg) ,'.dat'
 
        iounit = 14
-       
-#if defined(WRITESTOUTFILE)      
+
 ! open an output file and write initial values to file
-       open(iounit, file=filename_avg, status="unknown")          
+       open(iounit, file=avg_fname, status="unknown")          
 
 ! write column header output 
        write(iounit,*)'     t(yr)     Limits  ',                       &
@@ -265,7 +269,7 @@ IMPLICIT NONE
        endif
        
 ! Append model state to file  
-       open(iounit, file=filename_avg, status="old",                   &
+       open(iounit, file=avg_fname, status="old",                      &
                 position="append")
 
        write(iounit,fmt) int(timeM),                                   & 
@@ -371,8 +375,8 @@ IMPLICIT NONE
 
        SUBROUTINE MODELIO_JSON_OUTPUT(                                &
                       filename_avg,                                    &
-                           outstep,                                    &
-                        outstepmax,                                    &
+!                           outstep,                                    &
+!                        outstepmax,                                    &
                              thout,                                    &
                               sout,                                    &
                               cout,                                    &
@@ -445,9 +449,9 @@ IMPLICIT NONE
 ! > -----------------------------------------------------------------------------------------
        CHARACTER*64, INTENT(IN)          :: filename_avg
 
-       INTEGER,               intent(in) :: outstep, outstepmax
+!       INTEGER,               intent(in) :: outstep, outstepmax
 
-       REAL(KIND=wp), intent(in), dimension (outstepmax,nbox) ::       &
+       REAL(KIND=wp), intent(in), dimension (:,:) ::       &
             thout,                                                     &
             sout,                                                      &
             cout,                                                      &
@@ -459,29 +463,244 @@ IMPLICIT NONE
             expout,                                                    &
             ocpco2out
 
-       REAL(KIND=wp), intent(in), dimension (outstepmax) ::            &
+       REAL(KIND=wp), intent(in), dimension (:) ::            &
             tout,                                                      &
             psout,                                                     &
             atpco2out
 
-       INTEGER(KIND=ip), intent(in), dimension (outstepmax) ::         &
+       INTEGER(KIND=ip), intent(in), dimension (:) ::         &
             nlout     
             
 
 #if defined(USEJSONOUT)
-       CHARACTER*64 :: avg_fname            
+       TYPE(json_core)                           :: json 
+       TYPE(json_value),POINTER                  :: p, inp, outp
+       LOGICAL                                   :: is_valid
+       INTEGER                                   :: iunit 
+       CHARACTER(KIND=json_CK,LEN=:),ALLOCATABLE :: error_msg
+       CHARACTER*64                              :: avg_fname            
 
-       write (avg_fname , '(a,a)') filename_avg ,'.json'
 ! Write it out here
+       write (avg_fname , '(a,a)') trim(filename_avg) ,'.json'
 
+       call json%initialize(verbose=.true.,compress_vectors=.true.); &
+         if (json%failed()) stop
+       call json%create_object(p,avg_fname); if (json%failed()) stop
 
+!input structure:
+! Would be great to write the parameters with the output, but struggling to
+!    find a way to write out 2-d matrices for P, K, and R.
+!    call json%create_object(inp,'inputs'); if (json%failed()) stop
+!    call json%add(p, inp); if (json%failed()) stop
+!
+!    call json%add(inp, 't0', 0.1_wp); if (json%failed()) stop
+!    call json%add(inp, 'tf', 1.1_wp); if (json%failed()) stop
+!    call json%add(inp, 'x0', 9999.000_wp); if (json%failed()) stop
+!    nullify(inp)
 
+!model output structure:
+    call json%create_array(outp,'output'); if (json%failed()) stop
 
+    call json%add(p, outp); if (json%failed()) stop
 
-
-#endif
+    !model output variables using different commands:
+    ! vec = 1,outstep vector
+    ! arr = nbx,outstep array
+    call modelio_json_add_vec(json, outp, 'Time', 's' , tout )
+    call modelio_json_add_arr(json, outp, 'Theta', 'deg.C', thout )
+    call modelio_json_add_arr(json, outp, 'Salinity', '', sout )
+    call modelio_json_add_arr(json, outp, 'DIC', 'mol C m-3', cout )
+    call modelio_json_add_arr(json, outp, 'ALK', 'mol eq m-3', aout )
+    call modelio_json_add_arr(json, outp, 'PO4', 'mol P m-3', pout )
+    call modelio_json_add_arr(json, outp, 'NO3', 'mol N m-3', nout )
+    call modelio_json_add_arr(json, outp, 'FeT', 'mol Fe m-3', fout )
+    call modelio_json_add_arr(json, outp, 'LT' , 'mol LT m-3', lout )
+    call modelio_json_add_arr(json, outp, 'Export', &
+                                               'GtC yr-1', expout )
+    call modelio_json_add_arr(json, outp, 'Ocean pCO2', &
+                                               'uatm', ocpco2out )
+    call modelio_json_add_vec(json, outp, 'Nutrient limitation code', &
+                                               '', real(nlout, wp))
+    call modelio_json_add_vec(json, outp, 'Nutrient efficiency P*', &
+                                               '%', psout )
+    call modelio_json_add_vec(json, outp, 'Atmospheric pCO2', &
+                                               'uatm', atpco2out )
+    nullify(outp)
+    !validate it:
+    !call json%validate(p, is_valid, error_msg)
+    !if (.not. is_valid) then
+    !    stop &
+    !    'Error: p is not a valid JSON linked list: '
+    !    write(*,*) error_msg
+    !end if
+    open(newunit=iunit, file=avg_fname, status='REPLACE')
+    call json%print(p,iunit); if (json%failed()) stop
+    close(iunit)
+    !cleanup:
+    call json%destroy(p); if (json%failed()) stop
+#endif 
        RETURN
        END SUBROUTINE MODELIO_JSON_OUTPUT
+!=======================================================================
+#if defined(USEJSONOUT)
+       SUBROUTINE MODELIO_JSON_ADD_VEC(json, me, variable, units, rdata)
+! Write vector output using the json-fortran library
+!
+! JSON-Fortran: A Modern Fortran JSON API
+! <https:
+!
+! Copyright (c) 2014-2021, Jacob Williams
+! All rights reserved.
+!
+! Redistribution and use in source and binary forms, with or without modification,
+! are permitted provided that the following conditions are met:
+!
+! * Redistributions of source code must retain the above copyright notice, this
+! list of conditions and the following disclaimer.
+!
+! * Redistributions in binary form must reproduce the above copyright notice, this
+! list of conditions and the following disclaimer in the documentation and/or
+! other materials provided with the distribution.
+!
+! * The names of its contributors may not be used to endorse or promote products
+! derived from this software without specific prior written permission.
+!
+! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+! ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+! WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+! DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+! ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+! (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+! LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+! ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+! (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+! SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+!
+! > -----------------------------------------------------------------------------------------
+! >
+! > Original FSON License:
+! >
+! > Copyright (c) 2012 Joseph A. Levin
+! >
+! > Permission is hereby granted, free of charge, to any person obtaining a copy of this
+! > software and associated documentation files (the "Software"), to deal in the Software
+! > without restriction, including without limitation the rights to use, copy, modify, merge,
+! > publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+! > persons to whom the Software is furnished to do so, subject to the following conditions:
+! >
+! > The above copyright notice and this permission notice shall be included in all copies or
+! > substantial portions of the Software.
+! >
+! > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+! > INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+! > PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+! > LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
+! > OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+! > DEALINGS IN THE SOFTWARE.
+! >
+! > -----------------------------------------------------------------------------------------
+       IMPLICIT NONE
+       TYPE(json_core),INTENT(INOUT) :: json
+       TYPE(json_value),POINTER :: me, var
+       CHARACTER(LEN=*),INTENT(IN) :: variable, units
+       REAL(KIND=WP),DIMENSION(:),INTENT(IN) :: rdata
+       !initialize:
+       nullify(var)
+       !create the object before data can be added (name does not matter):
+       call json%create_object(var,'') ; if (json%failed()) stop
+       !variable info:
+       call json%add(var, 'variable', trim(variable)); if (json%failed()) stop
+       call json%add(var, 'units', trim(units)); if (json%failed()) stop
+       !model output [vector of reals]:
+       call json%add(var, 'data', rdata); if (json%failed()) stop
+       !add this variable to model output structure:
+       call json%add(me, var); if (json%failed()) stop
+       !cleanup:
+       nullify(var)
+       RETURN
+       END SUBROUTINE MODELIO_JSON_ADD_VEC
+!=======================================================================
+       SUBROUTINE MODELIO_JSON_ADD_ARR(json, me, variable, units, rdata)
+! Write vector output using the json-fortran library
+!
+! JSON-Fortran: A Modern Fortran JSON API
+! <https:
+!
+! Copyright (c) 2014-2021, Jacob Williams
+! All rights reserved.
+!
+! Redistribution and use in source and binary forms, with or without modification,
+! are permitted provided that the following conditions are met:
+!
+! * Redistributions of source code must retain the above copyright notice, this
+! list of conditions and the following disclaimer.
+!
+! * Redistributions in binary form must reproduce the above copyright notice, this
+! list of conditions and the following disclaimer in the documentation and/or
+! other materials provided with the distribution.
+!
+! * The names of its contributors may not be used to endorse or promote products
+! derived from this software without specific prior written permission.
+!
+! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+! ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+! WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+! DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+! ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+! (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+! LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+! ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+! (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+! SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+!
+! > -----------------------------------------------------------------------------------------
+! >
+! > Original FSON License:
+! >
+! > Copyright (c) 2012 Joseph A. Levin
+! >
+! > Permission is hereby granted, free of charge, to any person obtaining a copy of this
+! > software and associated documentation files (the "Software"), to deal in the Software
+! > without restriction, including without limitation the rights to use, copy, modify, merge,
+! > publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+! > persons to whom the Software is furnished to do so, subject to the following conditions:
+! >
+! > The above copyright notice and this permission notice shall be included in all copies or
+! > substantial portions of the Software.
+! >
+! > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+! > INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+! > PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+! > LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
+! > OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+! > DEALINGS IN THE SOFTWARE.
+! >
+! > -----------------------------------------------------------------------------------------
+       IMPLICIT NONE
+       TYPE(json_core),INTENT(INOUT)           :: json
+       TYPE(json_value),POINTER                :: me, var
+       CHARACTER(LEN=*),INTENT(IN)             :: variable, units
+       REAL(KIND=WP),DIMENSION(:,:),INTENT(IN) :: rdata
+       INTEGER                                 :: i
+       !initialize:
+       nullify(var)
+       !create the object before data can be added (name does not matter):
+       call json%create_object(var,'') ; if (json%failed()) stop
+       !variable info:
+       call json%add(var, 'variable', trim(variable)); if (json%failed()) stop
+       call json%add(var, 'units', trim(units)); if (json%failed()) stop
+       
+       do i=1,nbox
+           !model output [vector of reals]:
+           call json%add(var, 'data', rdata(i,:)); if (json%failed()) stop
+           !add this variable to model output structure:
+           call json%add(me, var); if (json%failed()) stop
+       enddo
+       !cleanup:
+       nullify(var)
+       RETURN
+       END SUBROUTINE MODELIO_JSON_ADD_ARR
+#endif
 !=======================================================================
 
     SUBROUTINE MODELIO_JSON_INPUT(                                     &
@@ -602,7 +821,8 @@ IMPLICIT NONE
 
 
 ! initialize the class
-       call json%initialize()
+       call json%initialize(); if (json%failed()) stop         &
+            'error initializing json-fortran'
         
 ! read the file
 !json_data => fson_parse("run_microCOSM_4boxvariablelt_pickup.json")
