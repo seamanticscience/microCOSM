@@ -62,7 +62,7 @@ REAL(KIND=wp), DIMENSION(nbox) :: wind, fopen
 ! atomic weight of iron = 56
 REAL(KIND=wp)                  :: weight_fe, fe_sol, beta, Kscav, relaxfe  
 ! iron input rate
-REAL(KIND=wp), DIMENSION(nbox) :: fe_depo
+REAL(KIND=wp), DIMENSION(nbox) :: fe_depo, fe_pptmask
 ! Dynamic Ligand variables
 REAL(KIND=wp)                  :: gamma_Fe, lt_lifetime
 REAL(KIND=wp), DIMENSION(nbox) :: dlambdadz, lambda 

@@ -26,6 +26,8 @@ IMPLICIT NONE
             dx,                                                        &
             dy,                                                        &
             dz,                                                        &
+            depth,                                                     &
+            latitude,                                                  &
             Kin,                                                       &
             Rin,                                                       &
             Pin,                                                       &
@@ -78,7 +80,7 @@ IMPLICIT NONE
             atpco2in
 
        REAL(KIND=wp), intent(in), dimension (nbox) ::                  &
-            dx, dy, dz,                                                &
+            dx, dy, dz, depth, latitude,                               &
             thin,                                                      &
             sain,                                                      &
             cain,                                                      &
@@ -106,7 +108,7 @@ IMPLICIT NONE
             lout,                                                      &
             expout,                                                    &
             ocpco2out
-            
+
        REAL(KIND=wp), intent(out), dimension (outstepmax) ::           &
             tout,                                                      &
             psout,                                                     &
@@ -131,8 +133,8 @@ IMPLICIT NONE
 ! initial time
        time = 0._wp
 
-       CALL establish_dimensions(dx,dy,dz,lat,area,vol,invol,          &
-                                          depth,pressure)
+       CALL establish_dimensions(dx,dy,dz,latitude,depth,area,         &
+                                            vol,invol,pressure)
 
 ! Set model variables from input values
        theta = thin
@@ -145,16 +147,16 @@ IMPLICIT NONE
        fet = fein * nmolkg2molm3
        lt  = ltin * nmolkg2molm3
        sit = phin * umolkg2molm3 * rSIP
-              
-! More config/forcing variables       
+
+! More config/forcing variables
        K   = Kin
        R   = Rin
        P   = Pin
        psi = psi_in  
        dif = dif_in
        wind= wind_in
-       fopen=foin                
- 
+       fopen=foin
+
 ! initialize tracer rates of change
 ! temp, salt, and si are passive for now, just for co2 solubility
        dthetadt = zero 
@@ -171,7 +173,7 @@ IMPLICIT NONE
 ! max export prodution rate: (again, phosphorus units, mol P m-3 s-1)
 !      alpha = 0.5d-6 * conv / (30.0*86400.0) ! Recover with alpha_yr=6e-6
        alpha = alpha_yr * conv_molkg_molm3 / (speryr) 
-       
+
 ! Initial export production and nutrient limitation code
        light  = zero
        ilimit = zero
@@ -186,8 +188,8 @@ IMPLICIT NONE
 !  convert to mol Fe m-2 s-1
        fe_depo = fe_input / (weight_fe*speryr)
 
-! ligand parameters 
-       gamma_Fe   = gamma_in                                              
+! ligand parameters
+       gamma_Fe   = gamma_in
        dlambdadz  = dldz_in
        lt_lifetime= lt_lifein
 
@@ -199,20 +201,12 @@ IMPLICIT NONE
        endif
 
 ! evaluate pstar, consistent with Harvardton Bears SO sensitivity
-       pstar = MAX(calc_pstar(po4), calc_pstar(no3)) 
+       pstar = MAX(calc_pstar(po4), calc_pstar(no3))
        
 ! Initialize atmospheric carbon content
-! Mass dry atmosphere = (5.1352+/-0.0003)d18 kg (Trenberth & Smith,
-! Journal of Climate 2005)
-! and Mean molecular mass air = 28.97 g/mol (NASA earth fact sheet)
-!  but need to scale by the ratio of Earth surface area to model surface area
-! Earths area = 5.10082000d8 km2 * 1.e6 m2/km2 (NOAA earth fact sheet)
-!       atmos_moles = atmos_moles * area(3)/(5.10082e8 * 1.e6)
-       atmos_moles = ((5.1352e18_wp * 1000._wp) / 28.97_wp)            &
-                        * (area(3)/(5.10082e8_wp * 1.e6_wp))
+       atmos_moles  = calc_atmos_moles(area)
        pco2atmos    = atpco2in  * uatm2atm
        atmos_carbon = pco2atmos * atmos_moles
-       sitM         = (po4 * rSIP) / umolkg2molm3 
 
 !! Find out initial conditions of the carbon system for given input values
        call carbon_fluxes(theta,                                       &
@@ -247,7 +241,7 @@ IMPLICIT NONE
        
 #if defined(WRITEOUTFILE)    
 ! open an output file and write initial values to file
-          write (filename, '(a,I0.6,a)') 'microCOSM',id,'.dat'
+          write (filename, '(a,I0.6,a)') 'microCOSM_'    ,id,'_output.dat'
           open(14,file=filename,status='unknown')
 
 ! write column header output 
@@ -327,10 +321,10 @@ IMPLICIT NONE
          time=nstep*dt / (speryr) 
 
 ! evaluate biogeochemical rates of change
-! Surface boxes...
-         netco2flux = zero
                   
-! Calculate surface air-sea gas exchange of CO2      
+! Calculate surface air-sea gas exchange of CO2   
+         sit = po4 * rSIP
+         
          call carbon_fluxes(theta,                                     &
                              salt,                                     &
                               dic,                                     &
@@ -345,8 +339,18 @@ IMPLICIT NONE
                         pco2ocean,                                     &
                           fluxCO2) 
 
-         netco2flux = netco2flux + sum(fluxCO2 * area)
-         
+         netco2flux = sum(fluxCO2 * area)
+
+#ifndef FIXATMPCO2
+! Update atmospheric CO2 (but only if you want to)
+
+        netco2flux=netco2flux*dt
+        call calc_atmos_pco2(atmos_moles,                              &
+                             atmos_carbon,                             &
+                             netco2flux,                               &
+                             pco2atmos)
+#endif
+       
 ! Make sure subsurface boxes are masked by fopen = 0         
          ddicdt     = ddicdt     + fluxCO2 / dz
 
@@ -387,10 +391,10 @@ IMPLICIT NONE
 
 ! Dynamic ligand production is based on exudation in the surface layers depending on 
 !   production and release during remineralization in the ocean interior
-       dltdt  = dltdt + (abs(export) * gamma_Fe)  - (lambda * lt) 
+       dltdt = dltdt + (abs(export) * gamma_Fe - lambda * lt)
 
 ! input of iron (can include (vent source)/fe_sol)
-       dfetdt = dfetdt + fe_sol * fe_depo / dz 
+       dfetdt = dfetdt + (fe_sol * fe_depo) / dz 
 
 ! scavenging and complexation of iron
 ! evaluate local feprime from fet and lt
@@ -401,17 +405,9 @@ IMPLICIT NONE
 
 ! if FeT > LT, then all excess iron is Fe-prime and precipitates out quickly
 ! Liu and Millero indicate very small "soluble" free iron
-       WHERE (fet > lt ) dfetdt = dfetdt - (one/relaxfe)*(fet - lt) 
-
-#ifndef FIXATMPCO2
-! Update atmospheric CO2 (but only if you want to)
-
-        netco2flux=netco2flux*dt
-        call calc_atmos_pco2(atmos_moles,                              &
-                             atmos_carbon,                             &
-                             netco2flux,                               &
-                             pco2atmos)
-#endif
+       fe_pptmask = 0._wp
+       WHERE (fet > lt ) fe_pptmask = 1._wp 
+       dfetdt = dfetdt - fe_pptmask * ((one/relaxfe)*(fet-lt))
      
 ! Euler forward step concentrations
        theta = theta + dthetadt * dt 
@@ -713,8 +709,7 @@ INTEGER                             :: i
 !=======================================================================
 
 !=======================================================================
-! solve quadratic for iron speciation
-! mick follows, March 2015
+! Produce a code for nutrient limitation in each box
        FUNCTION NUTRIENT_LIMIT_CODE(plimit, nlimit, flimit, ilimit)
        USE MOD_BOXES
 
