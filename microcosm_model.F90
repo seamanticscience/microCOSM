@@ -194,7 +194,7 @@
 ! Box 3 mixes with box 1, 4 and 5; 
 ! Box 4 mixes with box 2, 3, and 6.
 ! Box 5 mixes with box 3 and 6.
-! Box 4 mixes with box 4 and 5.
+! Box 6 mixes with box 4 and 5.
 !                       Box1    Box2    Box3    Box4     Box5    Box6 
        Kin = RESHAPE([ 0.0_wp, 1.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, & ! Box1
                        1.0_wp, 0.0_wp, 0.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, & ! Box2
@@ -255,7 +255,7 @@
 !divide by 2.5e-3 because fe_sol is multiplied again within model.
        fe_input(1:6)= [ 1.5e-1_wp, (1.e9_wp*56._wp)/(2.5e-3_wp*dx(2)*dy(2)),   &
                         1.5e-3_wp, (1.e9_wp*56._wp)/(2.5e-3_wp*dx(4)*dy(4)),   &
-                        7.5e-2_wp, (1.e9_wp*56._wp)/(2.5e-3_wp*dx(6)*dy(6)) ]
+                        1.5e-2_wp, (1.e9_wp*56._wp)/(2.5e-3_wp*dx(6)*dy(6)) ]
 
 ! Deep ocean box lifetime modifier to capture the gradient due to
 ! photodegradation near the surface and slower loss in the deep
