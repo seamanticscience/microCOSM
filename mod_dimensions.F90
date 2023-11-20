@@ -3,8 +3,6 @@ MODULE MOD_BOXES
     IMPLICIT NONE
 #if defined(FOURBOX)
     INTEGER, PARAMETER :: nbox = 4
-#elif defined(FOURTEENBOX)
-    INTEGER, PARAMETER :: nbox = 14
 #else
 ! default to three box model
     INTEGER, PARAMETER :: nbox = 3
@@ -102,8 +100,6 @@ REAL(KIND=wp), DIMENSION(nbox), intent(in) :: nutrient
 
 #if defined(FOURBOX)
     CALC_PSTAR = (nutrient(4)  - nutrient(1)) / nutrient(4) 
-#elif defined(FOURTEENBOX)
-    CALC_PSTAR = (nutrient(14) - nutrient(2)) / nutrient(14) 
 #else
     CALC_PSTAR = (nutrient(3)  - nutrient(1)) / nutrient(3) 
 #endif
