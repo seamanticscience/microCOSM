@@ -722,7 +722,6 @@ IMPLICIT NONE
        else
           latitude=ivec
        endif
-       write(*,*) latitude
        
 ! Parameter values
 ! Overturning circulations strength
@@ -798,7 +797,7 @@ IMPLICIT NONE
        else
           fopen_in=ivec
        endif
-
+       
 ! Initial concentrations
 ! Initial temperatures
        call json%get('theta', ivec, found)
@@ -847,7 +846,7 @@ IMPLICIT NONE
        else
           niin=ivec
        endif
-
+       
 ! Initial iron concentrations
        call json%get('iron', ivec, found)
        if ( .not. found ) then 
@@ -871,7 +870,7 @@ IMPLICIT NONE
        else
           atpco2in=isca
        endif
-      
+       
 ! Read circulation matrix (Wish i could subroutine this, but fails compilation 
 !   with  
 ! "Error: Found no matching specific binding for the call to the GENERIC 'info'")
@@ -902,7 +901,7 @@ IMPLICIT NONE
         end do
         nullify(p_matrix)
 
-        Pin=imat
+        Pin=transpose(imat)
         deallocate(imat)
 
 !Read Mixing matrix (Wish i could subroutine this, but fails compilation with
@@ -935,7 +934,7 @@ IMPLICIT NONE
         end do
         nullify(p_matrix)
 
-        Kin=imat
+        Kin=transpose(imat)
         deallocate(imat)
 
 !Read Rrmemin matrix (Wish i could subroutine this, but fails compilation with
@@ -961,13 +960,13 @@ IMPLICIT NONE
             call core%get(p_child,ivec) !get the vector (column of the matrix)
             if (.not. allocated(ivec)) error stop 'error: could not get integer column'
             if (size(ivec)/=n_rows) error stop 'error: column is wrong size'
-            Rin(:,i) = ivec
+            imat(:,i) = ivec
             deallocate(ivec)
             nullify(p_child)
         end do
         nullify(p_matrix)
  
-        Rin=imat
+        Rin=transpose(imat)
         deallocate(imat)
 
 ! clean up
