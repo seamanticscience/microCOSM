@@ -19,7 +19,7 @@ IMPLICIT NONE
 
 ! geometry
 !REAL(KIND=wp), DIMENSION(nbox)      :: dx, dy, dz, lat
-REAL(KIND=wp), DIMENSION(nbox)      :: lat
+!REAL(KIND=wp), DIMENSION(nbox)      :: lat
 REAL(KIND=wp), DIMENSION(nbox)      :: area, vol, invol, pressure
 !REAL(KIND=wp), DIMENSION(nbox,nbox) :: K, R
 
@@ -46,12 +46,9 @@ REAL(KIND=wp), DIMENSION(nbox),      intent(in)  :: dx, dy, dz, lat,   &
 
 REAL(KIND=wp), DIMENSION(nbox),      intent(out) ::  area, vol, invol, &
                                                   pressure
-!REAL(KIND=wp), DIMENSION(nbox,nbox), intent(out) :: K, R
-REAL(KIND=wp)                                    :: m2deg
 
 ! applied pressure in bars for carbon system coefficients
 pressure = (depth/10._wp) - 1._wp
-                                                    
 area     = dx * dy 
 vol      = area * dz 
 invol    = 1._wp / vol  

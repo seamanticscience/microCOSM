@@ -25,8 +25,12 @@
        USE MOD_PRECISION
        USE MOD_BOXES
        USE MOD_MODELMAIN
-
+#if defined(USEJSONIN)
+       USE MOD_MODELIO, ONLY: MODELIO_JSON_INPUT
+#endif
        IMPLICIT NONE
+
+       CHARACTER*64 :: filename_init            
 
        INTEGER :: outstepmax, id
        
@@ -85,31 +89,32 @@
             psout,                                                     &
             atpco2out
 
-       INTEGER, dimension (:), allocatable   ::                        &
+       INTEGER(KIND=ip), dimension (:), allocatable   ::               &
             nlout
 
-       ! Input some initial parameters
+! Local variable definitions
+
+#if defined(USEJSONIN)
+       write (filename_init , '(a,a)') 'microcosm_pickup.json'
+
+       call modelio_json_input(                                       &
+            filename_init, id,                                         &
+            maxyears, outputyears, outstepmax,                         &
+            dx, dy, dz, depth, latitude,                               &
+            Kin, Rin, Pin,                                             &
+            psi_in, dif_in,                                            &
+            alpha_yr, gamma_in, lt_lifein,                             &
+            dldz_in, fe_input, wind_in, fopen_in,                      &
+            thin, sain, cain, alin, phin, niin, fein, liin,            &
+            atpco2in                                                   &
+            )          
+#else
+! Input some initial parameters
        maxyears   = 1.e4_wp
        outputyears= 1.e2_wp
        outstepmax = int((maxyears/outputyears)+1)
-       
-       ! allocate memory
-       allocate ( tout      (outstepmax) )
-       allocate ( nlout     (outstepmax) )
-       allocate ( psout     (outstepmax) )
-       allocate ( atpco2out (outstepmax) )
-       allocate ( thout     (outstepmax,nbox) )
-       allocate ( sout      (outstepmax,nbox) )
-       allocate ( cout      (outstepmax,nbox) )
-       allocate ( aout      (outstepmax,nbox) )
-       allocate ( pout      (outstepmax,nbox) )
-       allocate ( nout      (outstepmax,nbox) )
-       allocate ( fout      (outstepmax,nbox) )
-       allocate ( lout      (outstepmax,nbox) )
-       allocate ( expout    (outstepmax,nbox) )
-       allocate ( pco2out   (outstepmax,nbox) )
 
-! Initialize input arguements
+! Initialize input arguements manually...depends on how many boxes there are
        thin     =      0._wp
        sain     =     34._wp
        cain     =   2150._wp
@@ -124,7 +129,7 @@
        
 ! Overturning and mixing rates (m3/s)
 !       psi_in = 20.e6_wp
-       dif_in =  0.e6_wp
+       dif_in =  1.e6_wp
        
 ! Wind speed (m/s)for CO2 gas fluxes
        wind_in      =   0._wp
@@ -343,7 +348,6 @@
 ! photodegradation near the surface and slower loss in the deep
        dldz_in(1:4)  = [ 1._wp, 1._wp, 1._wp, 1.e-2_wp ]
 #else
-
 ! Default to the three box model
        psi_in = 20.e6_wp
        
@@ -417,7 +421,24 @@
 ! Deep ocean box lifetime modifier to capture the gradient due to
 ! photodegradation near the surface and slower loss in the deep
        dldz_in(1:3)  = [ 1._wp, 1._wp, 1.e-2_wp ]
-#endif       
+#endif  ! endif box parameters
+#endif  ! endif jsonio
+
+       ! allocate memory for output
+       allocate ( tout      (outstepmax) )
+       allocate ( nlout     (outstepmax) )
+       allocate ( psout     (outstepmax) )
+       allocate ( atpco2out (outstepmax) )
+       allocate ( thout     (outstepmax,nbox) )
+       allocate ( sout      (outstepmax,nbox) )
+       allocate ( cout      (outstepmax,nbox) )
+       allocate ( aout      (outstepmax,nbox) )
+       allocate ( pout      (outstepmax,nbox) )
+       allocate ( nout      (outstepmax,nbox) )
+       allocate ( fout      (outstepmax,nbox) )
+       allocate ( lout      (outstepmax,nbox) )
+       allocate ( expout    (outstepmax,nbox) )
+       allocate ( pco2out   (outstepmax,nbox) )
 
        call model(id, maxyears, outputyears, outstepmax,               &
             dx, dy, dz, depth, latitude,                               &

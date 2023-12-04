@@ -74,7 +74,7 @@ REAL(KIND=wp), DIMENSION(nbox) :: export
 REAL(KIND=wp)                  :: alpha 
 REAL(KIND=wp), DIMENSION(nbox) :: light, ilimit, plimit, nlimit, flimit
 ! nutrient limitation codes
-INTEGER                        :: lim
+INTEGER(kind=ip) lim
 
 CONTAINS
 
