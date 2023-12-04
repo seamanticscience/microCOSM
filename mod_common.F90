@@ -13,12 +13,12 @@ REAL(KIND=wp), PARAMETER :: dperyr       = 365._wp
 REAL(KIND=wp), PARAMETER :: speryr       = 31536000._wp
 
 ! Conversion factors
-REAL(KIND=wp), PARAMETER :: convmolkgmolm3 = 1024.5_wp 
-REAL(KIND=wp), PARAMETER :: convcmhrms     = 1._wp/3.6e5_wp
+REAL(KIND=wp), PARAMETER :: conv_molkg_molm3 = 1024.5_wp 
+REAL(KIND=wp), PARAMETER :: conv_cmhr_ms     = 1._wp/3.6e5_wp
 
-REAL(KIND=wp), PARAMETER :: permil       = 1._wp/convmolkgmolm3
-REAL(KIND=wp), PARAMETER :: umolkg2molm3 = convmolkgmolm3 * 1.e-6_wp 
-REAL(KIND=wp), PARAMETER :: nmolkg2molm3 = convmolkgmolm3 * 1.e-9_wp 
+REAL(KIND=wp), PARAMETER :: permil       = 1._wp/conv_molkg_molm3
+REAL(KIND=wp), PARAMETER :: umolkg2molm3 = conv_molkg_molm3 * 1.e-6_wp 
+REAL(KIND=wp), PARAMETER :: nmolkg2molm3 = conv_molkg_molm3 * 1.e-9_wp 
 REAL(KIND=wp), PARAMETER :: uatm2atm     = 1.e-6_wp 
 REAL(KIND=wp), PARAMETER :: molps2gtcyr  = 106._wp * 12._wp * speryr * 1.e-15_wp 
 
@@ -108,9 +108,9 @@ IMPLICIT NONE
    ph   = eight
 
 ! half saturation constants 
-   kfe    = 0.1e-9_wp*convmolkgmolm3
-   kpo4   = 0.1e-6_wp*convmolkgmolm3
-   kno3   = 0.1e-6_wp*convmolkgmolm3*rNP
+   kfe    = 0.1e-9_wp*conv_molkg_molm3
+   kpo4   = 0.1e-6_wp*conv_molkg_molm3
+   kno3   = 0.1e-6_wp*conv_molkg_molm3*rNP
    klight = 30._wp
 
 ! Iron cycle parameters 

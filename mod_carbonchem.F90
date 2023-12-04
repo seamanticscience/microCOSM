@@ -18,8 +18,8 @@
 !    along with SolveSAPHE.  If not, see <http://www.gnu.org/licenses/>.
 !
        USE MOD_PRECISION
-       USE MOD_COMMON, ONLY : one, permil, convmolkgmolm3,           &
-                               convcmhrms, Kwexch_av
+       USE MOD_COMMON, ONLY : one, permil, conv_molkg_molm3,           &
+                               conv_cmhr_ms, Kwexch_av
        USE MOD_CHEMCONST
        USE MOD_PHSOLVERS
        USE MOD_CHEMSPECIATION
@@ -276,7 +276,7 @@
                  -    0.092307_wp * theta * theta * theta              &
                  +    7.555e-4_wp * theta * theta * theta * theta
 
-      Kwexch =  (Kwexch_av * convcmhrms * wind*wind * fopen )        &
+      Kwexch =  (Kwexch_av * conv_cmhr_ms * wind*wind * fopen )        &
                 / sqrt(schmidtDIC/660._wp)    
                
       do i = 1,nbox
@@ -305,7 +305,7 @@
                              * api0_dic )
       end do
 
-      fluxCO2 = fluxCO2 * convmolkgmolm3
+      fluxCO2 = fluxCO2 * conv_molkg_molm3
 RETURN
       END SUBROUTINE CARBON_FLUXES
 !=======================================================================

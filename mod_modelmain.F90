@@ -175,7 +175,7 @@ IMPLICIT NONE
 ! Export production parameters (Parekh et al, 2005):
 ! max export prodution rate: (again, phosphorus units, mol P m-3 s-1)
 !      alpha = 0.5d-6 * conv / (30.0*86400.0) ! Recover with alpha_yr=6e-6
-       alpha = alpha_yr * convmolkgmolm3 / (speryr) 
+       alpha = alpha_yr * conv_molkg_molm3 / (speryr) 
 
 ! Initial export production and nutrient limitation code
        light  = zero
