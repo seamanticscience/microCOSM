@@ -1,9 +1,9 @@
 ! -*- f90 -*-
-! atmospherd-3-box-ocean carbon cycle model
+! atmosphere-ocean carbon cycle box model
 ! mick follows, march 2015
 ! convert matlab to f90 - march/june 2016
 ! significant work by jonathan lauderale june 2016-oct 2019
-! refresh, parallelization, and expansion by jonathan lauderdale 2020-2021
+! refresh, parallelization, and expansion by jonathan lauderdale 2020-
 !
 !         --------------------------------
 !         |          ATMOSPHERE          |
@@ -21,6 +21,7 @@
 !=======================================================================
        PROGRAM MICROCOSM_MODEL
 !=======================================================================
+
        USE MOD_PRECISION
        USE MOD_BOXES
        USE MOD_MODELMAIN
@@ -45,7 +46,7 @@
             psi_in,                                                    &
             dif_in
 
-! Input arrays (nbox dimensions)
+! Input arrays (nbox dimensionesix)
        REAL(KIND=wp), dimension (nbox) ::                              & 
             dx,                                                        &
             dy,                                                        &
@@ -70,7 +71,7 @@
             Rin,                                                       &
             Pin
             
-! Output arrays (nbox, by timestep dimensions)
+! Output arrays (nbox, by timestep dimensionesix)
        REAL(KIND=wp), dimension (:,:), allocatable ::                  &
             thout,                                                     &
             sout,                                                      &
@@ -108,7 +109,7 @@
             atpco2in                                                   &
             )          
 #else
-       ! Input some initial parameters
+! Input some initial parameters
        maxyears   = 1.e4_wp
        outputyears= 1.e2_wp
        outstepmax = int((maxyears/outputyears)+1)
@@ -163,7 +164,109 @@
        id            = 1
 
 ! Array inputs
-#if defined(FOURBOX)
+#if defined(SIXBOX)
+! For a 20SV AMOC, psi_in (i.e. Southern Ocean upwelling) needs to be 2x
+       psi_in= 20.e6_wp
+
+       dx    = [17.0e6_wp, 17.0e6_wp, 17.0e6_wp,                       &
+                17.0e6_wp, 17.0e6_wp, 17.0e6_wp ]
+       dy    = [ 4.0e6_wp,  4.0e6_wp,  2.0e6_wp,                       &
+                 2.0e6_wp,  8.0e6_wp,  8.0e6_wp ]
+       dz    = [ 100._wp, 3900._wp,  100._wp,                          & 
+                3900._wp,  100._wp, 3900._wp ]
+                
+       depth = [       dz(1)/2._wp,                                    &
+                 dz(1)+dz(2)/2._wp,                                    &
+                       dz(3)/2._wp,                                    &
+                 dz(3)+dz(4)/2._wp,                                    &
+                       dz(5)/2._wp,                                    &
+                 dz(5)+dz(6)/2._wp ]
+                 
+       m2deg    = 180._wp/(dy(1)+dy(3)+dy(5))  
+
+       latitude = [((dy(1)/2._wp)+(dy(3)/2._wp)),                      &
+                   ((dy(2)/2._wp)+(dy(4)/2._wp)),                      &
+                   ((dy(3)/2._wp)              ),                      &
+                   ((dy(4)/2._wp)              ),                      &
+                   ((dy(5)/2._wp)+(dy(3)/2._wp)),                      &
+                   ((dy(6)/2._wp)+(dy(4)/2._wp))                       &
+                  ]
+       latitude = -90._wp+(latitude*m2deg)
+
+! define arrays (nbox*nbox long) of box connectivity for mixing and overturning (by rows)
+! Box 1 mixes with box 2 and 3; 
+! Box 2 mixes with box 1 and 4; 
+! Box 3 mixes with box 1, 4 and 5; 
+! Box 4 mixes with box 2, 3, and 6.
+! Box 5 mixes with box 3 and 6.
+! Box 6 mixes with box 4 and 5.
+!                       Box1    Box2    Box3    Box4     Box5    Box6 
+       Kin = RESHAPE([ 0.0_wp, 1.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, & ! Box1
+                       1.0_wp, 0.0_wp, 0.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, & ! Box2
+                       1.0_wp, 0.0_wp, 0.0_wp, 1.0_wp, 1.0_wp, 0.0_wp, & ! Box3
+                       0.0_wp, 1.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, 1.0_wp, & ! Box4
+                       0.0_wp, 0.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, 1.0_wp, & ! Box5
+                       0.0_wp, 0.0_wp, 0.0_wp, 1.0_wp, 1.0_wp, 0.0_wp  & ! Box6
+                     ], [ nbox, nbox ] )
+       
+! Box 1 is upstream of box 2; 
+! Box 2 is upstream of box 1 and box 4; 
+! Box 3 is upstream of box 1, 4, and 5; 
+! Box 4 is upstream of box 2, 3, and 6;
+! Box 5 is upstream of box 1 and box 6;
+! Box 6 is upstream of box 4 and box 5.
+!                       Box1     Box2     Box3     Box4     Box5     Box6  
+       Pin = RESHAPE([ 0.00_wp, 1.00_wp, 0.00_wp, 0.00_wp, 0.00_wp, 0.00_wp, & ! Box1
+                       0.35_wp, 0.00_wp, 0.00_wp, 0.90_wp, 0.00_wp, 0.00_wp, & ! Box2
+                       0.15_wp, 0.00_wp, 0.00_wp, 0.55_wp, 0.30_wp, 0.00_wp, & ! Box3
+                       0.00_wp, 0.25_wp, 1.00_wp, 0.00_wp, 0.00_wp, 1.10_wp, & ! Box4
+                       0.50_wp, 0.00_wp, 0.00_wp, 0.00_wp, 0.00_wp, 0.50_wp, & ! Box5
+                       0.00_wp, 0.00_wp, 0.00_wp, 0.90_wp, 0.70_wp, 0.00_wp  & ! Box6
+                     ], [ nbox, nbox ] )
+
+! define array of remineralization coefficients (by rows)
+! -1 indicates all of export is lost from cell, while 
+! +1 indicates all of export is remineralized (gained) by cell
+! Box 1 loses export from Box 1, which is completely remineralized in Box 2
+! Box 3 loses export from Box 3, which is completely remineralized in Box 4 
+! Box 5 loses export from Box 5, which is completely remineralized in Box 6 
+!                       Box1    Box2    Box3    Box4     Box5    Box6 
+       Rin = RESHAPE([-1.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, & ! Box1
+                       0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, & ! Box2
+                       0.0_wp, 0.0_wp,-1.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, & ! Box3
+                       0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, & ! Box4
+                       0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp,-1.0_wp, 1.0_wp, & ! Box5
+                       0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp  & ! Box6
+                     ], [ nbox, nbox ] )
+                     
+! Initial conditions
+       thin(1:6)= [   20.0_wp,    4.0_wp,   -1.00_wp,   -1.00_wp,   20.0_wp,    4.0_wp ]
+       sain(1:6)= [   35.5_wp,   35.5_wp,   34.75_wp,   34.75_wp,   35.0_wp,   35.0_wp ]
+       cain(1:6)= [ 2100.0_wp, 2400.0_wp, 2100.00_wp, 2400.00_wp, 2100.0_wp, 2400.0_wp ]
+       alin(1:6)= [ 2350.0_wp, 2400.0_wp, 2300.00_wp, 2400.00_wp, 2300.0_wp, 2400.0_wp ]
+       phin(1:6)= [    0.0_wp,    2.5_wp,    2.50_wp,    2.50_wp,    0.0_wp,    2.5_wp ]
+       niin(1:6)= [    0.0_wp,   36.0_wp,   30.00_wp,   36.00_wp,    0.0_wp,   36.0_wp ]
+
+! Wind speed (m/s)for CO2 gas fluxes
+       wind_in(1:6) = [ 5._wp, 0._wp, 10._wp, 0._wp, 5._wp, 0._wp ]
+       
+! Open surface fraction in contact with atmoshpere 
+!  1 => fully open, <1 => flux impeded (e.g. by sea ice)
+       fopen_in(1:6)= [ 1._wp, 0._wp, 1._wp, 0._wp, 1._wp, 0._wp ]       
+       
+! Dust deposition in g Fe m-2 year-1
+! Hydrothermal vent input of 1 Gmol/yr (Tagliabue et al., 2010)
+! mol Fe/yr * g/mol * 1/area  == g Fe m-2 year-1....
+!divide by 2.5e-3 because fe_sol is multiplied again within model.
+       fe_input(1:6)= [ 1.5e-1_wp, (1.e9_wp*56._wp)/(2.5e-3_wp*dx(2)*dy(2)),   &
+                        1.5e-3_wp, (1.e9_wp*56._wp)/(2.5e-3_wp*dx(4)*dy(4)),   &
+                        1.5e-2_wp, (1.e9_wp*56._wp)/(2.5e-3_wp*dx(6)*dy(6)) ]
+
+! Deep ocean box lifetime modifier to capture the gradient due to
+! photodegradation near the surface and slower loss in the deep
+       dldz_in(1:6)  = [ 1._wp, 1.e-2_wp, 1._wp, 1.e-2_wp, 1._wp, 1.e-2_wp ]
+       
+#elif defined(FOURBOX)
 ! For a 20SV AMOC, psi_in (i.e. Southern Ocean upwelling) needs to be 2x
        psi_in= 40.e6_wp
 
@@ -210,8 +313,8 @@
 ! define array of remineralization coefficients (by rows)
 ! -1 indicates all of export is lost from cell, while 
 ! +1 indicates all of export is remineralized (gained) by cell
-! Box 1 loses export from Box 1, which is completely remineralized in Box 3 (Box 2 is adjacent)
-! Box 2 loses export from Box 2, which is also completely remineralized in Box 3 (Box 1 is adjacent)
+! Box 1 loses export from Box 1, which is completely remineralized in Box 4 (Box 2 is adjacent)
+! Box 2 loses export from Box 2, which is also completely remineralized in Box 4 (Box 1 is adjacent)
 !                       Box1    Box2    Box3    Box4 
        Rin = RESHAPE([-1.0_wp, 0.0_wp, 0.0_wp, 1.0_wp,                 & ! Box1
                        0.0_wp,-1.0_wp, 0.0_wp, 1.0_wp,                 & ! Box2
@@ -244,9 +347,7 @@
 ! Deep ocean box lifetime modifier to capture the gradient due to
 ! photodegradation near the surface and slower loss in the deep
        dldz_in(1:4)  = [ 1._wp, 1._wp, 1._wp, 1.e-2_wp ]
-       
 #else
-
 ! Default to the three box model
        psi_in = 20.e6_wp
        
@@ -320,8 +421,8 @@
 ! Deep ocean box lifetime modifier to capture the gradient due to
 ! photodegradation near the surface and slower loss in the deep
        dldz_in(1:3)  = [ 1._wp, 1._wp, 1.e-2_wp ]
-#endif        
-#endif
+#endif  ! endif box parameters
+#endif  ! endif jsonio
 
        ! allocate memory for output
        allocate ( tout      (outstepmax) )
@@ -370,7 +471,7 @@
             nlout,                                                     &
             psout,                                                     &
             pco2out,                                                   &
-            atpco2out                                                  &           
+            atpco2out                                                  &
             )
 
 !=======================================================================

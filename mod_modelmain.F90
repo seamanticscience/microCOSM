@@ -175,8 +175,8 @@ IMPLICIT NONE
 ! Export production parameters (Parekh et al, 2005):
 ! max export prodution rate: (again, phosphorus units, mol P m-3 s-1)
 !      alpha = 0.5d-6 * conv / (30.0*86400.0) ! Recover with alpha_yr=6e-6
-       alpha = alpha_yr * convmolkgmolm3 / (speryr) 
-       
+       alpha = alpha_yr * conv_molkg_molm3 / (speryr) 
+
 ! Initial export production and nutrient limitation code
        light  = zero
        ilimit = zero
@@ -207,14 +207,7 @@ IMPLICIT NONE
        pstar = MAX(calc_pstar(po4), calc_pstar(no3))
        
 ! Initialize atmospheric carbon content
-! Mass dry atmosphere = (5.1352+/-0.0003)d18 kg (Trenberth & Smith,
-! Journal of Climate 2005)
-! and Mean molecular mass air = 28.97 g/mol (NASA earth fact sheet)
-!  but need to scale by the ratio of Earth surface area to model surface area
-! Earths area = 5.10082000d8 km2 * 1.e6 m2/km2 (NOAA earth fact sheet)
-!       atmos_moles = atmos_moles * area(3)/(5.10082e8 * 1.e6)
-       atmos_moles = ((5.1352e18_wp * 1000._wp) / 28.97_wp)            &
-                        * (area(3)/(5.10082e8_wp * 1.e6_wp))
+       atmos_moles  = calc_atmos_moles(area)
        pco2atmos    = atpco2in  * uatm2atm
        atmos_carbon = pco2atmos * atmos_moles
 
@@ -288,7 +281,8 @@ IMPLICIT NONE
 ! Calculate surface air-sea gas exchange of CO2      
 ! Diagnostically update silicate concentration linked to phosphate
          time=nstep*dt / (speryr) 
-
+                
+! Calculate surface air-sea gas exchange of CO2   
          sit = po4 * rSIP
          
          call carbon_fluxes(theta,                                     &
@@ -326,7 +320,6 @@ IMPLICIT NONE
          dfetdt = TRANSPORT(fet, P, psi, K, dif, invol)
          dltdt  = TRANSPORT(lt , P, psi, K, dif, invol)
 
-! evaluate biogeochemical rates of change
          ddicdt     = ddicdt     + fluxCO2 / dz
 
 ! biological terms
@@ -365,8 +358,7 @@ IMPLICIT NONE
 ! Dynamic ligand production is based on exudation in the surface layers depending on 
 !   production and release during remineralization in the ocean interior
        dltdt  = dltdt + (abs(export) * gamma_Fe - lambda * lt) 
-!500  format(1x, e15.8, 1x, e15.8, 1x, e15.8)       
-!       write(6,500) export
+
 ! input of iron (can include (vent source)/fe_sol)
        dfetdt = dfetdt + (fe_sol * fe_depo) / dz 
 

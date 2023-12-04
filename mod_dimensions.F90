@@ -3,6 +3,8 @@ MODULE MOD_BOXES
     IMPLICIT NONE
 #if defined(FOURBOX)
     INTEGER, PARAMETER :: nbox = 4
+#elif defined(SIXBOX)
+    INTEGER, PARAMETER :: nbox = 6
 #else
 ! default to three box model
     INTEGER, PARAMETER :: nbox = 3
@@ -27,6 +29,8 @@ CONTAINS
 !
 ! ESTABLISH_DIMENSIONS makes dimensional info (dx, dy, dz, areas, vols, etc) 
 !                      available to the main model.
+! CALC_ATMOS_MOLES uses ocean area to help scale number of moles in the atmosphere
+!                      for use in pCO2 calculations 
 ! TRANSPORT calculates advective and diffusive fluxes between boxes.
 ! CALC_PSTAR calculates efficiency of the biological pump associated with 
 !                      fluxes going into and out of the Southern Ocean box.
@@ -45,7 +49,6 @@ REAL(KIND=wp), DIMENSION(nbox),      intent(out) ::  area, vol, invol, &
 
 ! applied pressure in bars for carbon system coefficients
 pressure = (depth/10._wp) - 1._wp
-
 area     = dx * dy 
 vol      = area * dz 
 invol    = 1._wp / vol  
@@ -53,6 +56,38 @@ invol    = 1._wp / vol
 RETURN
 END SUBROUTINE ESTABLISH_DIMENSIONS
 !=======================================================================
+
+!!=======================================================================
+FUNCTION CALC_ATMOS_MOLES(area)
+! Calculate the total number of moles in the atmosphere for pCO2
+USE MOD_BOXES
+IMPLICIT NONE
+REAL(KIND=wp) :: CALC_ATMOS_MOLES
+
+REAL(KIND=wp), DIMENSION(nbox), intent(in) :: area
+
+! Mass dry atmosphere = (5.1352+/-0.0003)d18 kg (Trenberth & Smith,
+! Journal of Climate 2005)
+! and Mean molecular mass air = 28.97 g/mol (NASA earth fact sheet)
+!  but need to scale by the ratio of Earth surface area to model surface area
+! Earths area = 5.10082000d8 km2 * 1.e6 m2/km2 (NOAA earth fact sheet)
+!       atmos_moles = atmos_moles * area(3)/(5.10082e8 * 1.e6)
+#if defined(SIXBOX)
+    CALC_ATMOS_MOLES = ((5.1352e18_wp * 1000._wp) / 28.97_wp)          &
+                        *((area(2)+area(4)+area(6))/                   &
+!                        *((area(1)+area(3)+area(5))/                   &
+                          (5.10082e8_wp * 1.e6_wp))
+#elif defined(FOURBOX)
+    CALC_ATMOS_MOLES = ((5.1352e18_wp * 1000._wp) / 28.97_wp)          &
+                        * (area(4)/(5.10082e8_wp * 1.e6_wp))
+#else
+    CALC_ATMOS_MOLES = ((5.1352e18_wp * 1000._wp) / 28.97_wp)          &
+                        * (area(3)/(5.10082e8_wp * 1.e6_wp))
+#endif
+
+RETURN
+END FUNCTION CALC_ATMOS_MOLES
+!!=======================================================================
 
 !!=======================================================================
 !FUNCTION TRANSPORT(x, kappa, psi, invol)
@@ -98,8 +133,10 @@ REAL(KIND=wp) :: CALC_PSTAR
 
 REAL(KIND=wp), DIMENSION(nbox), intent(in) :: nutrient
 
-#if defined(FOURBOX)
-    CALC_PSTAR = (nutrient(4)  - nutrient(1)) / nutrient(4) 
+#if defined(SIXBOX)
+    CALC_PSTAR = (nutrient(4)  - nutrient(3)) / nutrient(4) 
+#elif defined(FOURBOX)
+    CALC_PSTAR = (nutrient(4) - nutrient(1)) / nutrient(4) 
 #else
     CALC_PSTAR = (nutrient(3)  - nutrient(1)) / nutrient(3) 
 #endif
