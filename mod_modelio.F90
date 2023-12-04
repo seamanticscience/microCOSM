@@ -713,7 +713,6 @@ IMPLICIT NONE
        else
           depth=ivec
        endif
-       write(*,*) depth
 
 ! Box latitude
        call json%get('latitude', ivec, found)
