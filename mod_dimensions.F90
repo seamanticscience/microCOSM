@@ -134,7 +134,11 @@ REAL(KIND=wp) :: CALC_PSTAR
 REAL(KIND=wp), DIMENSION(nbox), intent(in) :: nutrient
 
 #if defined(SIXBOX)
-    CALC_PSTAR = (nutrient(4)  - nutrient(3)) / nutrient(4) 
+    REAL(KIND=wp) :: deep_ocean_mean
+      
+    deep_ocean_mean = (nutrient(2)+nutrient(4)+nutrient(6))/3
+
+    CALC_PSTAR = (deep_ocean_mean  - nutrient(3)) / deep_ocean_mean 
 #elif defined(FOURBOX)
     CALC_PSTAR = (nutrient(4) - nutrient(1)) / nutrient(4) 
 #else
